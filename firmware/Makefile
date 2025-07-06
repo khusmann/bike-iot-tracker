@@ -2,13 +2,15 @@
 include ../.env
 
 WEBREPL_CLI = ../3rdparty/webrepl_cli.py
+PYTHON = ../.venv/bin/python
+MPREMOTE = ../.venv/bin/mpremote
 
 push:
-	python $(WEBREPL_CLI) -p $(WEBREPL_PASSWORD) boot.py $(DEVICE_IP):boot.py
-	python $(WEBREPL_CLI) -p $(WEBREPL_PASSWORD) main.py $(DEVICE_IP):main.py
-	python $(WEBREPL_CLI) -p $(WEBREPL_PASSWORD) ../.env $(DEVICE_IP):device.env
+	$(PYTHON) $(WEBREPL_CLI) -p $(WEBREPL_PASSWORD) boot.py $(WEBREPL_IP):boot.py
+	$(PYTHON) $(WEBREPL_CLI) -p $(WEBREPL_PASSWORD) main.py $(WEBREPL_IP):main.py
+	$(PYTHON) $(WEBREPL_CLI) -p $(WEBREPL_PASSWORD) ../.env $(WEBREPL_IP):device.env
 
 push-local:
-	mpremote connect $(SERIAL_PORT) fs cp boot.py :
-	mpremote connect $(SERIAL_PORT) fs cp main.py :
-	mpremote connect $(SERIAL_PORT) fs cp ../.env :.env
+	$(MPREMOTE) connect $(SERIAL_PORT) fs cp boot.py :
+	$(MPREMOTE) connect $(SERIAL_PORT) fs cp main.py :
+	$(MPREMOTE) connect $(SERIAL_PORT) fs cp ../.env :.env

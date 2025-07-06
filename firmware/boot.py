@@ -1,8 +1,9 @@
 import network
 import time
 
-def load_dotenv(filepath):
-    env = {}
+
+def load_dotenv(filepath: str):
+    env: dict[str, str] = {}
     try:
         with open(filepath) as f:
             for line in f:
@@ -16,7 +17,8 @@ def load_dotenv(filepath):
         print("No .env file found")
     return env
 
-def connect_wifi(ssid, password, timeout=15):
+
+def connect_wifi(ssid: str, password: str, timeout: int = 15):
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     if not wlan.isconnected():
@@ -31,6 +33,7 @@ def connect_wifi(ssid, password, timeout=15):
     print("Connected with IP:", wlan.ifconfig()[0])
     return True
 
+
 env = load_dotenv('.env')
 
 ssid = env.get('WIFI_SSID')
@@ -39,7 +42,7 @@ password = env.get('WIFI_PASSWORD')
 if ssid and password:
     connect_wifi(ssid, password)
 else:
-    print("SSID or PASSWORD not found in device.env")
+    print("SSID or PASSWORD not found in .env")
 
 try:
     import webrepl
