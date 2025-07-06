@@ -208,3 +208,6 @@ __marimo__/
 
 # STL
 *.stl
+
+# ENV
+.env

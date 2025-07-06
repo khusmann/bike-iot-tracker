@@ -16,6 +16,7 @@ def reed_irq_handler(pin):
         debouncing = True
         debounce_timer.init(mode=Timer.ONE_SHOT, period=50, callback=debounce_callback)
         led.value(not led.value())
+        print("beep")
 
 reed.irq(trigger=Pin.IRQ_FALLING, handler=reed_irq_handler)
 
