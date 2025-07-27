@@ -2,6 +2,14 @@
 
 ## Installation
 
+### Setup
+
+Start by creating and activating the venv and installing deps:
+
+```
+source activate.sh
+```
+
 ### Firmware
 
 To set up the webrepl I followed the instructions
