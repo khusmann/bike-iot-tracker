@@ -34,7 +34,7 @@ def connect_wifi(ssid: str, password: str, timeout: int = 15):
     return True
 
 
-env = load_dotenv('.env')
+env = load_dotenv('device.env')
 
 ssid = env.get('WIFI_SSID')
 password = env.get('WIFI_PASSWORD')
