@@ -1,3 +1,4 @@
+# import typing as t
 
 
 def load_dotenv(filepath: str = "device.env"):
@@ -14,3 +15,12 @@ def load_dotenv(filepath: str = "device.env"):
     except OSError:
         print("No .env file found")
     return env
+
+
+class Config:
+    wifi_ssid: str
+    wifi_password: str
+
+    def __init__(self, env: dict[str, str] = load_dotenv()):
+        self.wifi_ssid = env["WIFI_SSID"]
+        self.wifi_password = env["WIFI_PASSWORD"]

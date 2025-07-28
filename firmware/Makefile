@@ -6,7 +6,7 @@ MPREMOTE = ../.venv/bin/mpremote
 
 WEBREPL_CLI = $(PYTHON) ../3rdparty/webrepl_cli.py -p $(WEBREPL_PASSWORD)
 
-FILES = boot.py main.py config.py
+FILES = boot.py main.py config.py typing.py
 
 repl:
 	$(WEBREPL_CLI) $(WEBREPL_IP):$(WEBREPL_PORT)
