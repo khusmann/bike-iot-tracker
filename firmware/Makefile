@@ -6,7 +6,7 @@ MPREMOTE = ../.venv/bin/mpremote
 
 WEBREPL_CLI = $(PYTHON) ../3rdparty/webrepl_cli.py -p $(WEBREPL_PASSWORD)
 
-FILES = boot.py main.py
+FILES = boot.py main.py config.py
 
 repl:
 	$(WEBREPL_CLI) $(WEBREPL_IP):$(WEBREPL_PORT)
@@ -22,3 +22,7 @@ push:
 push-local:
 	$(MPREMOTE) connect $(SERIAL_PORT) fs cp ../.env :device.env
 	$(MPREMOTE) connect $(SERIAL_PORT) fs cp boot.py :
+	$(MPREMOTE) connect $(SERIAL_PORT) fs cp config.py :
+
+repl-local:
+	$(MPREMOTE) repl $(SERIAL_PORT)
