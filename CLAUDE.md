@@ -40,6 +40,8 @@ companion app.
 
 ### Android App
 
+- Keep Android App build / setup as simple as possible, and easy to build
+  without Android studio
 - Minimize phone battery usage via efficient BLE patterns:
   - `ScanSettings.SCAN_MODE_LOW_POWER` with device name/service UUID filters
   - `WorkManager` for periodic background syncs
