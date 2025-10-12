@@ -1,6 +1,0 @@
-{
-  "typeCheckingMode": "strict",
-  "reportMissingModuleSource": false,
-  "extraPaths": ["firmware/.venv/lib/python3.10/site-packages"],
-  "stubPath": "firmware/stubs"
-}

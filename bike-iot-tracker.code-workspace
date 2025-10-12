@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "name": "dev",
+      "path": "dev"
+    },
+    {
+      "name": "firmware",
+      "path": "firmware"
+    },
+    {
+      "name": "bike-iot-tracker",
+      "path": "."
+    }
+  ],
+  "settings": {}
+}
