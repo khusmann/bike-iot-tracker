@@ -39,10 +39,11 @@ update-3rdparty: $(THIRDPARTY_FILES)
 # Generate a target for each file in 3rdparty/sources.txt
 $(THIRDPARTY_FILES):
 	@echo "Updating $@..."
-	@filename=$$(basename $@); \
-	url=$$(grep -v '^#' 3rdparty/sources.txt | grep "^$$filename[[:space:]]" | awk '{print $$2}'); \
+	@mkdir -p $$(dirname $@); \
+	relpath=$$(echo $@ | sed 's|^3rdparty/||'); \
+	url=$$(grep -v '^#' 3rdparty/sources.txt | grep "^$$relpath[[:space:]]" | awk '{print $$2}'); \
 	if [ -z "$$url" ]; then \
-		echo "Error: No URL found for $$filename in 3rdparty/sources.txt"; \
+		echo "Error: No URL found for $$relpath in 3rdparty/sources.txt"; \
 		exit 1; \
 	fi; \
 	curl -f -L -o "$@" "$$url" || { echo "Failed to download $@"; exit 1; }

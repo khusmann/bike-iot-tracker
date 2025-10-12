@@ -2,3 +2,8 @@
 # Format: filename url
 webrepl_cli.py https://github.com/micropython/webrepl/raw/1e09d9a1d90fe52aba11d1e659afbc95a50cf088/webrepl_cli.py
 typing.py https://raw.githubusercontent.com/Josverl/micropython-stubs/7972fc8abea23907feae7e34f34a9ecff7a27e3f/mip/typing.py
+aioble/__init__.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/__init__.py
+aioble/core.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/core.py
+aioble/device.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/device.py
+aioble/server.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/server.py
+aioble/peripheral.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/peripheral.py
