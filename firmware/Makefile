@@ -32,6 +32,7 @@ push-local:
 	$(MPREMOTE) connect $(SERIAL_PORT) fs cp ../.env :device.env
 	$(MPREMOTE) connect $(SERIAL_PORT) fs cp $(SRC_DIR)/boot.py :boot.py
 	$(MPREMOTE) connect $(SERIAL_PORT) fs cp $(SRC_DIR)/config.py :config.py
+	$(MPREMOTE) connect $(SERIAL_PORT) fs mkdir aioble
 
 repl-local:
 	$(MPREMOTE) repl $(SERIAL_PORT)
