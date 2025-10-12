@@ -1,74 +1,67 @@
 # Bike IoT Tracker System Specification
 
-## Environment / System
+## Hardware Configuration
 
-Activate the Python virtual environment and install dependencies:
+**Platform:** ESP32 with wall power (no battery constraints)
+
+**Components:**
+- LED: GPIO Pin 4
+- Reed Switch: GPIO Pin 5 (internal pull-up enabled, monitors crank rotation)
+- Debounce period: 50ms
+
+## Development Environment
+
+Activate Python virtual environment:
 
 ```bash
 source activate.sh
 ```
 
-Hardware Configuration:
+## System Overview
 
-- LED: GPIO Pin 4
-- Reed Switch: GPIO Pin 5 (with internal pull-up) (connected to crank, not
-  wheel)
-- Debounce period: 50ms
+A stationary bike tracking system consisting of ESP32 firmware and an Android companion app.
 
-## 1. Overview
+**Architecture:**
+1. ESP32 firmware collects and stores pedaling telemetry
+2. Android app syncs data via BLE in the background
+3. Android app writes telemetry to HealthConnect
+4. Android app displays current bike status
 
-Create a firmware and an Android app for my stationary bike. The bike has a
-ESP32 installed in it with a single red LED and a reed switch to track pedaling.
-It's plugged into the wall, so no need to worry about battery performance.
+## Design Principles
 
-### Goal
+### Firmware (MicroPython)
+- Use type hints with `3rdparty/typing.py` shim module
+- Use async libraries (aioble for BLE)
+- Functional style with immutable data structures
 
-- Firmware stores telemetry data
-- Phone app syncs telemetry data via BLE in the background
-- Phone app updates telemetry into HealthConnect
-- Phone app has a simple display with current status
+### Android App
+- Minimize phone battery usage via efficient BLE patterns:
+  - `ScanSettings.SCAN_MODE_LOW_POWER` with device name/service UUID filters
+  - `WorkManager` for periodic background syncs
+  - BLE connections under 30 seconds
+  - No persistent foreground service
+- Functional style with immutable data structures
+- Prioritize simplicity
 
-### Design principles
+### General Philosophy
+- Simplicity first: suggest requirement changes when they enable simpler implementations
+- Prefer immutable data structures over mutation
+- Use functional patterns throughout
 
-In the firmware:
+## Implementation Stages
 
-- We use micropython and type hints as much as possible (using the
-  3rdparty/typing.py shim module)
-- Use async libraries (like aioble)
+### Stage 1: Basic Setup (Current)
+- Firmware-only implementation
+- LED toggles on crank rotation detection
+- WiFi with WebREPL for OTA updates
 
-In the mobile app:
+### Stage 2: BLE Proof-of-Concept
+**Firmware:**
+- Implement BLE peripheral with Cycling Speed and Cadence (CSC) service
+- Broadcast crank revolution count and timing via CSC notifications
 
-- Keep code as simple as possible
-- App should minimize battery usage of the phone by running in the background
-  using BLE scan wake-up patterns:
-  - Use Android's `ScanSettings.SCAN_MODE_LOW_POWER` with scan filters
-  - Match on device name or service UUID in filter
-  - Use `JobScheduler` or `WorkManager` for periodic sync attempts
-  - Keep BLE connection short (< 30 seconds per sync)
-  - No persistent foreground service needed
+**Android App:**
+- Connect to ESP32 via BLE on app launch
+- Display live CSC telemetry stream
 
-Everywhere:
-
-- Keep a functional style; avoid mutation in favor of immutable data structure
-  patterns
-- Always take a simple approach first. Requirements can be changed to simplify
-  implementation -- when a chance in requirement could simplify the
-  implementation, please prompt me to suggest the change.
-
-### Implementation Stages
-
-#### 1. Basic setup (current state of project)
-
-- Firmware only, no mobile app implementation
-- Basic LED toggle on wheel rotation detection
-- WiFi connectivity with WebREPL for OTA updates
-
-#### 2. BLE proof-of-concept
-
-- Add BLE support to the firmware
-  - Send CSC crank revolution notifications
-- Create a basic mobile app to talk to the firmware
-  - When opening the app, it should connect to the firmware via BLE and display
-    a live output of the data it's getting.
-
-#### 3. TBA (we'll fill this in later)
+### Stage 3: TBD
