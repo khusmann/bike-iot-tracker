@@ -11,7 +11,17 @@ SRC_DIR = src
 # Find all Python files in src directory recursively (following symlinks)
 SRC_FILES := $(shell find -L $(SRC_DIR) -type f -name '*.py')
 
-.PHONY: repl push push-local repl-local update-3rdparty
+.PHONY: help repl push push-local repl-local update-3rdparty
+
+help:
+	@echo "Available commands:"
+	@echo "  make repl            - Connect to WebREPL"
+	@echo "  make push            - Push source files to device via WebREPL"
+	@echo "  make push-local      - Push boot files to device via serial (for initial setup)"
+	@echo "  make repl-local      - Connect to REPL via serial"
+	@echo "  make update-3rdparty - Update all third-party dependencies"
+
+.DEFAULT_GOAL := help
 
 repl:
 	$(WEBREPL_CLI) $(WEBREPL_IP):$(WEBREPL_PORT)

@@ -1,3 +1,4 @@
+import os
 import network
 from config import load_dotenv
 
@@ -27,8 +28,7 @@ except ImportError:
     print("WebREPL not available or not configured")
 
 # Create necessary directories
-import os
-folders_to_create = ['aioble', 'udataclasses']
+folders_to_create = ['aioble', 'udataclasses', 'primitives']
 for folder in folders_to_create:
     try:
         os.mkdir(folder)
