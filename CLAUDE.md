@@ -23,9 +23,9 @@ It's plugged into the wall, so no need to worry about battery performance.
 
 ### Goal
 
-- Firmware stores telemtry data
-- Phone app syncs telemtry data via BLE in the background
-- Phone app updates telemtry into HealthConnect
+- Firmware stores telemetry data
+- Phone app syncs telemetry data via BLE in the background
+- Phone app updates telemetry into HealthConnect
 - Phone app has a simple display with current status
 
 ### Design principles
@@ -40,8 +40,12 @@ In the mobile app:
 
 - Keep code as simple as possible
 - App should minimize battery usage of the phone by running in the background
-  using "wake on ble scan" type tricks that fitbits use (we will want to specify
-  this behavior in detail later)
+  using BLE scan wake-up patterns:
+  - Use Android's `ScanSettings.SCAN_MODE_LOW_POWER` with scan filters
+  - Match on device name or service UUID in filter
+  - Use `JobScheduler` or `WorkManager` for periodic sync attempts
+  - Keep BLE connection short (< 30 seconds per sync)
+  - No persistent foreground service needed
 
 Everywhere:
 
