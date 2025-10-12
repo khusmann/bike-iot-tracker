@@ -55,24 +55,9 @@ companion app.
 - Prefer immutable data structures over mutation
 - Use functional patterns throughout
 
-## Implementation Stages
+### /dev
 
-### Stage 1: Basic Setup (Current)
+This folder contains notes and task tracking for ongoing development.
 
-- Firmware-only implementation
-- LED toggles on crank rotation detection
-- WiFi with WebREPL for OTA updates
-
-### Stage 2: BLE Proof-of-Concept
-
-**Firmware:**
-
-- Implement BLE peripheral with Cycling Speed and Cadence (CSC) service
-- Broadcast crank revolution count and timing via CSC notifications
-
-**Android App:**
-
-- Connect to ESP32 via BLE on app launch
-- Display live CSC telemetry stream
-
-### Stage 3: TBD
+- `stages.md` — high-level project goals and implementation stages
+- `tasks.md` — current actionable tasks for the active stage
