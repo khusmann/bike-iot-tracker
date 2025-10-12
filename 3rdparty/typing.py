@@ -1,4 +1,4 @@
-__version__ = "1.24.1.post2"
+__version__ = "1.26.1"
 
 def cast(type, val):
     return val
@@ -118,10 +118,13 @@ class Protocol:
 
 
 AnyStr = str
-Text = str
-Pattern = str
-Match = str
 TypedDict = dict
+
+# Deprecated
+# Text = str
+# Pattern = str
+# Match = str
+
 
 AbstractSet = _Subscriptable
 AsyncContextManager = _Subscriptable
@@ -153,6 +156,7 @@ MutableSet = _Subscriptable
 NamedTuple = _Subscriptable
 Optional = _Subscriptable
 OrderedDict = _Subscriptable
+Self = _Subscriptable
 Sequence = _Subscriptable
 Set = _Subscriptable
 Tuple = _Subscriptable
