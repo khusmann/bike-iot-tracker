@@ -10,14 +10,6 @@
 - Reed Switch: GPIO Pin 5 (internal pull-up enabled, monitors crank rotation)
 - Debounce period: 50ms
 
-## Development Environment
-
-Activate Python virtual environment:
-
-```bash
-source activate.sh
-```
-
 ## System Overview
 
 A stationary bike tracking system consisting of ESP32 firmware and an Android

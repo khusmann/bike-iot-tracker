@@ -1,5 +1,7 @@
 # Testing the BikeTracker Firmware
 
+**Note:** All commands in this document assume you're running them from the `firmware/` directory.
+
 ## Overview
 
 The firmware implements the Bluetooth Low Energy (BLE) Cycling Speed and Cadence
@@ -7,7 +9,7 @@ The firmware implements the Bluetooth Low Energy (BLE) Cycling Speed and Cadence
 
 ## Firmware Implementation
 
-The firmware ([main.py](firmware/src/main.py)) provides:
+The firmware ([main.py](src/main.py)) provides:
 
 - **BLE Peripheral**: Advertises as "BikeTracker" with CSC Service (UUID 0x1816)
 - **CSC Measurement Characteristic**: Broadcasts notifications with:
@@ -22,16 +24,10 @@ The firmware ([main.py](firmware/src/main.py)) provides:
 
 ### Setup
 
-1. Activate the Python virtual environment:
+Activate the Python virtual environment (this will create the venv if it doesn't exist and install dependencies):
 
 ```bash
 source activate.sh
-```
-
-2. Install test dependencies:
-
-```bash
-pip install -r test_requirements.txt
 ```
 
 ### Running the Test Client

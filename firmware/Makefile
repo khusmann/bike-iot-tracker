@@ -1,8 +1,8 @@
 
-include ../.env
+include .env
 
-PYTHON = ../.venv/bin/python
-MPREMOTE = ../.venv/bin/mpremote
+PYTHON = .venv/bin/python
+MPREMOTE = .venv/bin/mpremote
 
 WEBREPL_CLI = $(PYTHON) 3rdparty/webrepl_cli.py -p $(WEBREPL_PASSWORD)
 
@@ -20,7 +20,7 @@ repl:
 	$(WEBREPL_CLI) $(WEBREPL_IP):$(WEBREPL_PORT)
 
 push:
-	@$(WEBREPL_CLI) ../.env $(WEBREPL_IP):$(WEBREPL_PORT):device.env
+	@$(WEBREPL_CLI) .env $(WEBREPL_IP):$(WEBREPL_PORT):device.env
 	@for file in $(SRC_FILES); do \
 		relative=$$(echo $$file | sed 's|^$(SRC_DIR)/||'); \
 		echo "Pushing $$relative..."; \
@@ -29,7 +29,7 @@ push:
 
 # Push enough to get the WebREPL running
 push-local:
-	$(MPREMOTE) connect $(SERIAL_PORT) fs cp ../.env :device.env
+	$(MPREMOTE) connect $(SERIAL_PORT) fs cp .env :device.env
 	$(MPREMOTE) connect $(SERIAL_PORT) fs cp $(SRC_DIR)/boot.py :boot.py
 	$(MPREMOTE) connect $(SERIAL_PORT) fs cp $(SRC_DIR)/config.py :config.py
 	$(MPREMOTE) connect $(SERIAL_PORT) fs mkdir aioble

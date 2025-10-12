@@ -7,7 +7,7 @@
 Start by creating and activating the venv and installing deps:
 
 ```
-source activate.sh
+source firmware/activate.sh
 ```
 
 ### Firmware
