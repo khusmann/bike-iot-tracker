@@ -15,6 +15,7 @@ Tasks for **Stage 2: BLE Proof-of-Concept**
 - [ ] Broadcast CSC notifications on each crank rotation
 - [ ] Test BLE + WiFi coexistence for WebREPL development
 - [ ] Add BLE device name advertising
+- [ ] Write a simple Python script to test firmware (from a computer)
 
 ## Android App Tasks
 
