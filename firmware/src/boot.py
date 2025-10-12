@@ -25,3 +25,13 @@ try:
     webrepl.start()
 except ImportError:
     print("WebREPL not available or not configured")
+
+# Create necessary directories
+import os
+folders_to_create = ['aioble', 'udataclasses']
+for folder in folders_to_create:
+    try:
+        os.mkdir(folder)
+        print(f"Created folder: {folder}")
+    except OSError:
+        pass  # Folder already exists
