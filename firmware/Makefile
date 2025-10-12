@@ -4,9 +4,14 @@ include ../.env
 PYTHON = ../.venv/bin/python
 MPREMOTE = ../.venv/bin/mpremote
 
-WEBREPL_CLI = $(PYTHON) ../3rdparty/webrepl_cli.py -p $(WEBREPL_PASSWORD)
+WEBREPL_CLI = $(PYTHON) 3rdparty/webrepl_cli.py -p $(WEBREPL_PASSWORD)
 
 FILES = boot.py main.py config.py typing.py
+
+# Third-party dependency files from sources.txt
+THIRDPARTY_FILES := $(shell grep -v '^\#' 3rdparty/sources.txt | grep -v '^$$$$' | awk '{print "3rdparty/" $$1}')
+
+.PHONY: repl push push-local repl-local update-3rdparty $(THIRDPARTY_FILES)
 
 repl:
 	$(WEBREPL_CLI) $(WEBREPL_IP):$(WEBREPL_PORT)
@@ -26,3 +31,18 @@ push-local:
 
 repl-local:
 	$(MPREMOTE) repl $(SERIAL_PORT)
+
+# Update all third-party dependencies
+update-3rdparty: $(THIRDPARTY_FILES)
+	@echo "Done! All third-party dependencies updated."
+
+# Generate a target for each file in 3rdparty/sources.txt
+$(THIRDPARTY_FILES):
+	@echo "Updating $@..."
+	@filename=$$(basename $@); \
+	url=$$(grep -v '^#' 3rdparty/sources.txt | grep "^$$filename[[:space:]]" | awk '{print $$2}'); \
+	if [ -z "$$url" ]; then \
+		echo "Error: No URL found for $$filename in 3rdparty/sources.txt"; \
+		exit 1; \
+	fi; \
+	curl -f -L -o "$@" "$$url" || { echo "Failed to download $@"; exit 1; }
