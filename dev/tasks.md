@@ -5,17 +5,17 @@ Tasks for **Stage 2: BLE Proof-of-Concept**
 ## Firmware Tasks
 
 - [x] Set up aioble library in MicroPython environment
-- [ ] Implement BLE peripheral initialization
-- [ ] Create Cycling Speed and Cadence Service (UUID 0x1816)
-- [ ] Implement CSC Measurement characteristic with notification support
-- [ ] Track cumulative crank revolution count
-- [ ] Track crank event timing (last crank event time in 1/1024 second units)
-- [ ] Format CSC Measurement data per BLE spec (flags + cumulative revs + last
+- [x] Implement BLE peripheral initialization
+- [x] Create Cycling Speed and Cadence Service (UUID 0x1816)
+- [x] Implement CSC Measurement characteristic with notification support
+- [x] Track cumulative crank revolution count
+- [x] Track crank event timing (last crank event time in 1/1024 second units)
+- [x] Format CSC Measurement data per BLE spec (flags + cumulative revs + last
       event time)
-- [ ] Broadcast CSC notifications on each crank rotation
+- [x] Broadcast CSC notifications on each crank rotation
 - [ ] Test BLE + WiFi coexistence for WebREPL development
-- [ ] Add BLE device name advertising
-- [ ] Write a simple Python script to test firmware (from a computer)
+- [x] Add BLE device name advertising
+- [x] Write a simple Python script to test firmware (from a computer)
 
 ## Android App Tasks
 
