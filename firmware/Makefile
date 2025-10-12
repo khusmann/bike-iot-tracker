@@ -6,7 +6,10 @@ MPREMOTE = ../.venv/bin/mpremote
 
 WEBREPL_CLI = $(PYTHON) 3rdparty/webrepl_cli.py -p $(WEBREPL_PASSWORD)
 
-FILES = boot.py main.py config.py typing.py
+SRC_DIR = src
+
+# Find all Python files in src directory recursively (following symlinks)
+SRC_FILES := $(shell find -L $(SRC_DIR) -type f -name '*.py')
 
 # Third-party dependency files from sources.txt
 THIRDPARTY_FILES := $(shell grep -v '^\#' 3rdparty/sources.txt | grep -v '^$$$$' | awk '{print "3rdparty/" $$1}')
@@ -18,16 +21,17 @@ repl:
 
 push:
 	@$(WEBREPL_CLI) ../.env $(WEBREPL_IP):$(WEBREPL_PORT):device.env
-	@for file in $(FILES); do \
-		echo; \
-		$(WEBREPL_CLI) $$file $(WEBREPL_IP):$(WEBREPL_PORT):$$file; \
+	@for file in $(SRC_FILES); do \
+		relative=$$(echo $$file | sed 's|^$(SRC_DIR)/||'); \
+		echo "Pushing $$relative..."; \
+		$(WEBREPL_CLI) $$file $(WEBREPL_IP):$(WEBREPL_PORT):$$relative; \
 	done
 
 # Push enough to get the WebREPL running
 push-local:
 	$(MPREMOTE) connect $(SERIAL_PORT) fs cp ../.env :device.env
-	$(MPREMOTE) connect $(SERIAL_PORT) fs cp boot.py :
-	$(MPREMOTE) connect $(SERIAL_PORT) fs cp config.py :
+	$(MPREMOTE) connect $(SERIAL_PORT) fs cp $(SRC_DIR)/boot.py :boot.py
+	$(MPREMOTE) connect $(SERIAL_PORT) fs cp $(SRC_DIR)/config.py :config.py
 
 repl-local:
 	$(MPREMOTE) repl $(SERIAL_PORT)
