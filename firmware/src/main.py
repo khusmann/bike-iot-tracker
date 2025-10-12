@@ -4,6 +4,7 @@ from machine import Pin
 from time import ticks_ms, ticks_diff
 import bluetooth
 import aioble
+from udataclasses import dataclass
 
 # Hardware configuration
 led = Pin(4, Pin.OUT)
@@ -26,19 +27,12 @@ DEBOUNCE_MS = 50
 TIME_UNIT_HZ = 1024
 
 
-# Immutable telemetry state
+@dataclass(frozen=True)
 class TelemetryState:
     """Immutable state for crank telemetry tracking"""
-
-    def __init__(
-        self,
-        cumulative_revolutions: int = 0,
-        last_event_time: int = 0,
-        last_physical_time_ms: int = 0
-    ):
-        self.cumulative_revolutions = cumulative_revolutions
-        self.last_event_time = last_event_time
-        self.last_physical_time_ms = last_physical_time_ms
+    cumulative_revolutions: int = 0
+    last_event_time: int = 0
+    last_physical_time_ms: int = 0
 
     def with_new_revolution(self, current_time_ms: int) -> 'TelemetryState':
         """Return new state with incremented revolution count"""
