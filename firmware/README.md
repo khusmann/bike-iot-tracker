@@ -49,19 +49,31 @@ WIFI_PASSWORD=your_password
 
 3. Push initial files to enable WebREPL:
    ```bash
-   make push-local
+   make push-boot-local
    ```
-   This copies the minimal files needed ([boot.py](src/boot.py), [config.py](src/config.py)) and creates required directories.
+   This copies the minimal files needed ([boot.py](boot/boot.py), [config.py](boot/config.py)) via serial.
 
-4. Reboot the device. It will now connect to WiFi and start WebREPL.
+4. Push third-party libraries:
+   ```bash
+   make push-lib
+   ```
+   This copies all device libraries from `3rdparty/device/` to the device.
+
+5. Reboot the device. It will now connect to WiFi and start WebREPL.
 
 ### 4. Development Workflow
 
 Once WebREPL is configured, you can develop wirelessly:
 
 ```bash
-# Push all source files over WebREPL
+# Push application source files over WebREPL
 make push
+
+# Push boot files and device.env over WebREPL
+make push-boot
+
+# Push 3rdparty libraries over WebREPL
+make push-lib
 
 # Connect to WebREPL REPL
 make repl
@@ -74,11 +86,15 @@ make repl-local
 
 ```
 firmware/
-├── src/              # MicroPython source code (copied to device)
+├── src/              # Application source code
+│   ├── main.py       # Application entry point
+│   └── utils.py      # Utility functions
+├── boot/             # Boot/initialization files
 │   ├── boot.py       # Runs on device boot, sets up WiFi and WebREPL
-│   ├── config.py     # Device configuration
-│   └── main.py       # Application entry point
-├── 3rdparty/         # Vendored third-party dependencies
+│   └── config.py     # Device configuration
+├── 3rdparty/         # Vendored third-party code
+│   ├── device/       # Libraries pushed to device
+│   ├── tools/        # Host-side tools (webrepl_cli.py)
 │   └── README.md     # Dependency management documentation
 ├── stubs/            # Type stubs for IDE support
 ├── Makefile          # Build and deployment commands

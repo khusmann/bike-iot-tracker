@@ -25,9 +25,9 @@ help:
 	@echo "Available commands:"
 	@echo "  make repl            - Connect to WebREPL"
 	@echo "  make push            - Push src files to device via WebREPL"
-	@echo "  make push-boot       - Push boot files to device via WebREPL"
-	@echo "  make push-lib        - Push 3rdparty files and device.env to device via WebREPL"
-	@echo "  make push-boot-local - Push boot files to device via serial (for initial setup)"
+	@echo "  make push-boot       - Push boot files and device.env to device via WebREPL"
+	@echo "  make push-lib        - Push 3rdparty device libraries to device via WebREPL"
+	@echo "  make push-boot-local - Push boot files and device.env to device via serial (for initial setup)"
 	@echo "  make repl-local      - Connect to REPL via serial"
 	@echo "  make update-3rdparty - Update all third-party dependencies"
 
@@ -40,7 +40,7 @@ push-boot:
 	@echo "Pushing device.env..."
 	@$(WEBREPL_CLI) .env $(WEBREPL_IP):$(WEBREPL_PORT):device.env
 	@for file in $(BOOT_FILES); do \
-		relative=$$(echo $$file | sed 's|^$(SRC_DIR)/||'); \
+		relative=$$(echo $$file | sed 's|^$(BOOT_DIR)/||'); \
 		echo "Pushing $$relative..."; \
 		$(WEBREPL_CLI) $$file $(WEBREPL_IP):$(WEBREPL_PORT):$$relative; \
 	done
