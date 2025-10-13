@@ -27,6 +27,7 @@ companion app.
 ### Firmware (MicroPython)
 
 - Use type hints with `3rdparty/typing.py` shim module
+- Type hints should be imported with `import typing as t`
 - Use async libraries (aioble for BLE)
 - Functional style with immutable data structures
 

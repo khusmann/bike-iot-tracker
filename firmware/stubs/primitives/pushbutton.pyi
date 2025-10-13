@@ -1,7 +1,12 @@
 # primitives/pushbutton.pyi - Type stubs for pushbutton module
 
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Tuple, TypeVarTuple, TypeVar, Unpack
 import asyncio
+
+
+P = TypeVarTuple("P")
+R = TypeVar("R")
+
 
 class Pushbutton:
     """
@@ -52,8 +57,8 @@ class Pushbutton:
 
     def press_func(
         self,
-        func: Callable[..., Any] | None | bool = False,
-        args: Tuple[Any, ...] = ()
+        func: Callable[[Unpack[P]], R] | None | bool = False,
+        args: Tuple[Unpack[P]] = ()
     ) -> None:
         """
         Set callback for button press event.
@@ -68,8 +73,8 @@ class Pushbutton:
 
     def release_func(
         self,
-        func: Callable[..., Any] | None | bool = False,
-        args: Tuple[Any, ...] = ()
+        func: Callable[[Unpack[P]], R] | None | bool = False,
+        args: Tuple[Unpack[P]] = ()
     ) -> None:
         """
         Set callback for button release event.
@@ -84,8 +89,8 @@ class Pushbutton:
 
     def double_func(
         self,
-        func: Callable[..., Any] | None | bool = False,
-        args: Tuple[Any, ...] = ()
+        func: Callable[[Unpack[P]], R] | None | bool = False,
+        args: Tuple[Unpack[P]] = ()
     ) -> None:
         """
         Set callback for double-click event.
@@ -100,8 +105,8 @@ class Pushbutton:
 
     def long_func(
         self,
-        func: Callable[..., Any] | None | bool = False,
-        args: Tuple[Any, ...] = ()
+        func: Callable[[Unpack[P]], R] | None | bool = False,
+        args: Tuple[Unpack[P]] = ()
     ) -> None:
         """
         Set callback for long press event.
