@@ -7,7 +7,7 @@ import typing as t
 import time
 from dataclasses import dataclass, field
 from models import Session, SessionStore, Telemetry
-from storage import load_sessions, save_sessions
+from storage import read_session_store, write_session_store
 from utils import log
 
 
@@ -46,7 +46,7 @@ class SessionManager:
 
     def __init__(self) -> None:
         """Initialize the session manager by loading persisted sessions."""
-        self.store: SessionStore = load_sessions()
+        self.store: SessionStore = read_session_store()
         self.current_session: t.Optional[Session] = None
         log(
             f"SessionManager initialized with {len(self.store.sessions)} stored sessions"
@@ -102,7 +102,7 @@ class SessionManager:
         self.store.sessions.append(self.current_session)
 
         # Save to disk
-        save_sessions(self.store)
+        write_session_store(self.store)
 
         log(f"Ended session {self.current_session.id}: "
             f"{self.current_session.revolutions} revolutions, "
@@ -150,7 +150,7 @@ class SessionManager:
         # Create a temporary store with just the current session
         # We append it temporarily, save, then remove it
         self.store.sessions.append(self.current_session)
-        success = save_sessions(self.store)
+        success = write_session_store(self.store)
         self.store.sessions.pop()  # Remove it (not truly ended yet)
 
         if success:
@@ -185,7 +185,7 @@ class SessionManager:
         for session in self.store.sessions:
             if session.id == session_id:
                 session.synced = True
-                save_sessions(self.store)
+                write_session_store(self.store)
                 log(f"Marked session {session_id} as synced")
                 return True
 

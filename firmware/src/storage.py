@@ -14,7 +14,7 @@ SESSIONS_FILE = "/sessions.json"
 SESSIONS_TEMP_FILE = "/sessions.json.tmp"
 
 
-def load_sessions() -> SessionStore:
+def read_session_store() -> SessionStore:
     """
     Load sessions from filesystem.
 
@@ -57,7 +57,7 @@ def load_sessions() -> SessionStore:
         return SessionStore()
 
 
-def save_sessions(store: SessionStore) -> bool:
+def write_session_store(store: SessionStore) -> bool:
     """
     Save sessions to filesystem using atomic write.
 
