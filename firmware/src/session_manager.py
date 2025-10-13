@@ -3,7 +3,7 @@ Session management for tracking cycling sessions.
 
 Manages the lifecycle of sessions: starting, ending, updating, and persisting.
 """
-from typing import Optional
+import typing as t
 import time
 from session import Session, SessionStore
 from storage import load_sessions, save_sessions
@@ -20,8 +20,10 @@ class SessionManager:
     def __init__(self) -> None:
         """Initialize the session manager by loading persisted sessions."""
         self.store: SessionStore = load_sessions()
-        self.current_session: Optional[Session] = None
-        log(f"SessionManager initialized with {len(self.store.sessions)} stored sessions")
+        self.current_session: t.Optional[Session] = None
+        log(
+            f"SessionManager initialized with {len(self.store.sessions)} stored sessions"
+        )
 
     def start_session(self) -> Session:
         """
@@ -52,7 +54,7 @@ class SessionManager:
         log(f"Started session {session_id} at {current_time}")
         return self.current_session
 
-    def end_session(self) -> Optional[Session]:
+    def end_session(self) -> t.Optional[Session]:
         """
         End the current active session and save it to storage.
 
@@ -165,6 +167,6 @@ class SessionManager:
         """Check if there is currently an active session."""
         return self.current_session is not None
 
-    def get_current_session(self) -> Optional[Session]:
+    def get_current_session(self) -> t.Optional[Session]:
         """Get the current active session, if any."""
         return self.current_session

@@ -3,7 +3,7 @@ Session data structures and JSON serialization.
 
 Defines the core data model for tracking cycling sessions.
 """
-from typing import Any
+import typing as t
 from udataclasses import dataclass, field
 import json
 
@@ -26,7 +26,7 @@ class Session:
     revolutions: int
     synced: bool = False
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, t.Any]:
         """Convert a Session to a dictionary for JSON serialization."""
         return {
             "id": self.id,
@@ -37,7 +37,7 @@ class Session:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]):
+    def from_dict(cls, data: dict[str, t.Any]):
         """Create a Session from a dictionary (JSON deserialization)."""
         return Session(
             id=data["id"],
@@ -60,7 +60,7 @@ class SessionStore:
     sessions: list[Session] = field(default_factory=lambda: [])
     next_id: int = 0
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, t.Any]:
         """Convert a SessionStore to a dictionary for JSON serialization."""
         return {
             "sessions": [s.to_dict() for s in self.sessions],
@@ -68,7 +68,7 @@ class SessionStore:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]):
+    def from_dict(cls, data: dict[str, t.Any]):
         """Create a SessionStore from a dictionary (JSON deserialization)."""
         sessions = [Session.from_dict(s) for s in data.get("sessions", [])]
         next_id = data.get("next_id", 0)

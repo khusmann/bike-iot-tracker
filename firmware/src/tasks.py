@@ -7,7 +7,6 @@ easy to understand.
 """
 import asyncio
 from time import ticks_ms, ticks_diff
-from typing import Any
 import typing as t
 import aioble
 from session_manager import SessionManager
@@ -29,7 +28,7 @@ CONNECTION_POLL_INTERVAL_S = 1
 
 async def session_idle_timeout(
     session_manager: SessionManager,
-    state: Any
+    state: t.Any
 ) -> None:
     """
     Monitor for idle periods and automatically end sessions.
@@ -93,7 +92,7 @@ async def session_periodic_save(
 async def ble_serve_connection(
     connection: aioble.device.DeviceConnection,
     characteristic: aioble.Characteristic,
-    state: Any
+    state: t.Any
 ) -> None:
     """
     Handle a single BLE connection by sending telemetry notifications.
