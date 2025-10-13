@@ -1,10 +1,12 @@
 import asyncio
 import struct
 from machine import Pin
-from time import ticks_ms, ticks_diff
+from time import ticks_ms
+from typing import Callable
 import bluetooth
 import aioble
-from udataclasses import dataclass
+from udataclasses import dataclass, field
+from primitives import Pushbutton
 
 # Hardware configuration
 led = Pin(4, Pin.OUT)
@@ -18,9 +20,6 @@ CSC_MEASUREMENT_UUID = bluetooth.UUID(0x2A5B)
 
 # Device name for advertising
 DEVICE_NAME = "BikeTracker"
-
-# Debounce configuration
-DEBOUNCE_MS = 50
 
 # CSC timing constants
 # Time is measured in 1/1024 second units per BLE CSC spec
@@ -66,39 +65,54 @@ class TelemetryState:
         )
 
 
-# Global state (will be updated functionally)
-telemetry_state = TelemetryState()
-new_revolution_event = asyncio.Event()
-last_debounce_time_ms = 0
+@dataclass
+class AppState:
+    """
+    Mutable application state container.
+
+    Encapsulates all mutable state in one place to avoid module-level globals.
+    The telemetry_state field itself is immutable and updated functionally.
+    """
+    telemetry_state: TelemetryState = field(default_factory=TelemetryState)
+    new_revolution_event: asyncio.Event = field(default_factory=asyncio.Event)
 
 
-def reed_irq_handler(pin: Pin) -> None:
-    """IRQ handler for reed switch - updates telemetry on crank rotation"""
-    global telemetry_state, last_debounce_time_ms
+def make_reed_press_handler(state: AppState) -> Callable[[], None]:
+    """
+    Create a reed switch press handler with access to state.
 
-    current_time_ms = ticks_ms()
+    Args:
+        state: Application state object
 
-    # Debounce check
-    if ticks_diff(current_time_ms, last_debounce_time_ms) < DEBOUNCE_MS:
-        return
+    Returns:
+        Handler function for reed switch press events
+    """
+    def on_reed_press() -> None:
+        """Handler for reed switch press - updates telemetry on crank rotation"""
+        current_time_ms = ticks_ms()
 
-    last_debounce_time_ms = current_time_ms
+        # Update telemetry state (functional style)
+        state.telemetry_state = state.telemetry_state.with_new_revolution(
+            current_time_ms)
 
-    # Update telemetry state (functional style)
-    telemetry_state = telemetry_state.with_new_revolution(current_time_ms)
+        # Toggle LED for visual feedback
+        led.value(not led.value())
 
-    # Toggle LED for visual feedback
-    led.value(not led.value())
+        # Signal that new data is available
+        state.new_revolution_event.set()
 
-    # Signal that new data is available
-    new_revolution_event.set()
+        print(f"Revolution {state.telemetry_state.cumulative_revolutions}")
 
-    print(f"Revolution {telemetry_state.cumulative_revolutions}")
+    return on_reed_press
 
 
-async def advertise_and_serve() -> None:
-    """Main BLE advertising and connection serving loop"""
+async def advertise_and_serve(state: AppState) -> None:
+    """
+    Main BLE advertising and connection serving loop.
 
+    Args:
+        state: Application state object containing telemetry and event data
+    """
     # Register CSC Service
     csc_service = aioble.Service(CSC_SERVICE_UUID)
 
@@ -134,21 +148,21 @@ async def advertise_and_serve() -> None:
                     # Wait for new revolution event or timeout
                     try:
                         await asyncio.wait_for(
-                            new_revolution_event.wait(),
+                            state.new_revolution_event.wait(),
                             timeout=30.0
                         )
-                        new_revolution_event.clear()
+                        state.new_revolution_event.clear()
 
                         # Send notification with latest telemetry
-                        measurement_data = telemetry_state.to_csc_measurement()
+                        measurement_data = state.telemetry_state.to_csc_measurement()
                         csc_measurement_char.notify(
                             connection, measurement_data)
                         print(
-                            f"Sent notification: rev={telemetry_state.cumulative_revolutions}")
+                            f"Sent notification: rev={state.telemetry_state.cumulative_revolutions}")
 
                     except asyncio.TimeoutError:
                         # Periodic keepalive - send current state even if no new data
-                        measurement_data = telemetry_state.to_csc_measurement()
+                        measurement_data = state.telemetry_state.to_csc_measurement()
                         csc_measurement_char.notify(
                             connection, measurement_data)
                         print("Keepalive notification sent")
@@ -162,15 +176,20 @@ async def advertise_and_serve() -> None:
 async def main() -> None:
     """Main entry point - start BLE peripheral"""
 
-    # Enable reed switch IRQ
-    reed.irq(trigger=Pin.IRQ_FALLING, handler=reed_irq_handler)
+    # Create application state
+    state = AppState()
+
+    # Set up reed switch using Pushbutton primitive
+    # sense=1 because reed switch is active-low (PULL_UP, closed = 0)
+    reed_button = Pushbutton(reed, sense=1)
+    reed_button.press_func(make_reed_press_handler(state))
 
     print("Starting BikeTracker firmware...")
     print(f"LED on GPIO {led}")
     print(f"Reed switch on GPIO {reed}")
 
-    # Start BLE peripheral
-    await advertise_and_serve()
+    # Start BLE peripheral with state
+    await advertise_and_serve(state)
 
 
 # Run the async main loop
