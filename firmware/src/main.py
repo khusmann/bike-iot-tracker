@@ -134,7 +134,9 @@ async def ensure_wifi_and_sync_ntp() -> None:
         ntptime.settime()
         # Display current time
         current_time = localtime()
-        print(f"NTP time synchronized successfully: {current_time[0]}-{current_time[1]:02d}-{current_time[2]:02d} {current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d} UTC")
+        print(
+            f"NTP time synchronized successfully: {current_time[0]}-{current_time[1]:02d}-{current_time[2]:02d} {current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d} UTC"
+        )
     except Exception as e:
         print(f"Failed to sync NTP time: {e}")
         # Enter error state with distinct LED pattern (rapid double-blink)
@@ -149,6 +151,55 @@ async def ensure_wifi_and_sync_ntp() -> None:
             await asyncio.sleep(0.1)
             led.value(0)
             await asyncio.sleep(0.7)  # Longer pause between double-blinks
+
+
+async def serve_connection(
+    connection: aioble.device.DeviceConnection,
+    characteristic: aioble.Characteristic,
+    state: AppState
+) -> None:
+    """
+    Handle a single BLE connection by sending telemetry notifications.
+
+    Args:
+        connection: Active BLE connection to serve
+        characteristic: CSC measurement characteristic to notify on
+        state: Application state containing telemetry data
+    """
+    print(f"Connected to {connection.device}")
+
+    try:
+        while True:
+            # Wait for new revolution event or 30s timeout for keepalive
+            try:
+                await asyncio.wait_for(
+                    state.new_revolution_event.wait(),
+                    timeout=30.0
+                )
+                state.new_revolution_event.clear()
+                is_keepalive = False
+            except asyncio.TimeoutError:
+                is_keepalive = True
+
+            if (connection.is_connected()):
+                # Send current telemetry state
+                measurement_data = state.telemetry_state.to_csc_measurement()
+                characteristic.notify(connection, measurement_data)
+
+                # Log notification with timestamp
+                current_time = localtime()
+                timestamp = f"{current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"
+                if is_keepalive:
+                    print(f"[{timestamp}] Keepalive notification sent")
+                else:
+                    print(f"[{timestamp}] Notification sent: rev={state.telemetry_state.cumulative_revolutions}")
+            else:
+                break
+
+    except Exception as e:
+        print(f"Connection error: {e}")
+    finally:
+        print("Disconnected")
 
 
 async def advertise_and_serve(state: AppState) -> None:
@@ -179,49 +230,14 @@ async def advertise_and_serve(state: AppState) -> None:
     while True:
         print(f"Advertising as '{DEVICE_NAME}'...")
 
-        async with await aioble.advertise(
+        connection = await aioble.advertise(
             interval_us=250_000,  # 250ms advertising interval
             name=DEVICE_NAME,
             services=[CSC_SERVICE_UUID],
             appearance=0x0000,  # Generic appearance
-        ) as connection:
-            print(f"Connected to {connection.device}")
+        )
 
-            try:
-                # Connection handler loop
-                while connection.is_connected():
-                    # Wait for new revolution event or timeout
-                    try:
-                        await asyncio.wait_for(
-                            state.new_revolution_event.wait(),
-                            timeout=30.0
-                        )
-                        state.new_revolution_event.clear()
-
-                        # Send notification with latest telemetry
-                        measurement_data = state.telemetry_state.to_csc_measurement()
-
-                        # Need to check connection right before notify,
-                        # because the connection state could have changed since
-                        # the last event
-                        if connection.is_connected():
-                            csc_measurement_char.notify(
-                                connection, measurement_data)
-                            print(
-                                f"Sent notification: rev={state.telemetry_state.cumulative_revolutions}")
-
-                    except asyncio.TimeoutError:
-                        # Periodic keepalive - send current state even if no new data
-                        measurement_data = state.telemetry_state.to_csc_measurement()
-                        if connection.is_connected():
-                            csc_measurement_char.notify(
-                                connection, measurement_data)
-                            print("Keepalive notification sent")
-
-            except Exception as e:
-                print(f"Connection error: {e}")
-            finally:
-                print("Disconnected")
+        await serve_connection(connection, csc_measurement_char, state)
 
 
 async def main() -> None:
