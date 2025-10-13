@@ -1,0 +1,82 @@
+import asyncio
+import network
+import ntptime
+from machine import Pin
+from time import localtime
+from typing import Optional, Sequence
+
+# LED blink patterns (sequence of on/off durations in seconds)
+SIMPLE_BLINK_PATTERN = [0.5, 0.5]  # Simple blink: on 0.5s, off 0.5s
+DOUBLE_BLINK_PATTERN = [0.1, 0.1, 0.1, 0.7]  # Double-blink with pause
+
+
+async def blink_led(
+    led: Optional[Pin],
+    pattern: Sequence[float]
+) -> None:
+    """
+    Blink LED following a pattern of on/off durations.
+
+    Args:
+        led: Optional LED pin to blink (no-op if None)
+        pattern: Sequence of durations in seconds, alternating between on and off.
+                 First duration is on-time, second is off-time, etc.
+                 Example: [0.5, 0.5] for simple blink
+                 Example: [0.1, 0.1, 0.1, 0.7] for double-blink with pause
+    """
+    for i, duration in enumerate(pattern):
+        # Odd indices (0, 2, 4...) are on-time, even indices (1, 3, 5...) are off-time
+        if led is not None:
+            led.value(i % 2)
+        await asyncio.sleep(duration)
+
+
+async def ensure_wifi_connected(led: Optional[Pin] = None) -> network.WLAN:
+    """
+    Ensure WiFi is connected, retrying until successful.
+
+    If WiFi is not connected, blink the LED (if provided) and keep retrying.
+
+    Args:
+        led: Optional LED pin to blink while waiting for connection
+
+    Returns:
+        Connected WLAN interface
+    """
+    wlan = network.WLAN(network.STA_IF)
+
+    retry_count = 0
+    while not wlan.isconnected():
+        retry_count += 1
+        print(f"WiFi not connected. Attempt #{retry_count} to reconnect...")
+
+        await blink_led(led, SIMPLE_BLINK_PATTERN)
+
+    print(f"WiFi connected: {wlan.ifconfig()}")
+    return wlan
+
+
+async def sync_ntp_time(led: Optional[Pin] = None) -> None:
+    """
+    Synchronize system time via NTP.
+
+    On failure, enters an infinite error state with a distinct LED pattern
+    (rapid double-blink).
+
+    Args:
+        led: Optional LED pin for error indication
+    """
+    try:
+        print("Setting time via NTP...")
+        ntptime.settime()
+        # Display current time
+        current_time = localtime()
+        print(
+            f"NTP time synchronized successfully: {current_time[0]}-{current_time[1]:02d}-{current_time[2]:02d} {current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d} UTC"
+        )
+    except Exception as e:
+        print(f"Failed to sync NTP time: {e}")
+        # Enter error state with distinct LED pattern (rapid double-blink)
+        print("Entering NTP error state...")
+        while True:
+            await blink_led(led, DOUBLE_BLINK_PATTERN)

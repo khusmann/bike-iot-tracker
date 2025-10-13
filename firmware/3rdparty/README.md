@@ -1,7 +1,9 @@
 # 3rdparty
 
-This directory contains vendored third-party dependencies for the MicroPython
-firmware.
+This directory contains vendored third-party code organized into:
+
+- **`device/`** - Libraries that are pushed to the ESP32 device
+- **`tools/`** - Host-side tools used during development
 
 ## Managing Dependencies
 
@@ -48,19 +50,15 @@ To update a dependency to a newer version:
 
 ## Current Dependencies
 
-### typing.py
+### Device Libraries (`device/`)
+
+#### typing.py
 
 MicroPython typing stub for type hints compatibility. Enables IDE support for Python type annotations in MicroPython code.
 
 - **Source Repository**: https://github.com/Josverl/micropython-stubs
 
-### webrepl_cli.py
-
-CLI tool for WebREPL file operations and REPL access. Used by the parent Makefile for over-the-air firmware updates.
-
-- **Source Repository**: https://github.com/micropython/webrepl
-
-### aioble
+#### aioble
 
 Async Bluetooth Low Energy library for MicroPython. Provides the core BLE functionality for the bike tracker.
 
@@ -68,9 +66,24 @@ Async Bluetooth Low Energy library for MicroPython. Provides the core BLE functi
 - **Package**: `micropython/bluetooth/aioble`
 - **Modules**: `__init__.py`, `core.py`, `device.py`, `server.py`, `peripheral.py`
 
-### udataclasses
+#### udataclasses
 
 MicroPython port of Python's dataclasses. Enables immutable data structures with type hints, aligned with the functional programming style.
 
 - **Source Repository**: https://github.com/dhrosa/udataclasses
 - **Modules**: Full package including `__init__.py`, `constants.py`, `decorator.py`, `field.py`, `functions.py`, `source.py`, `transform_spec.py`
+
+#### primitives
+
+Async primitives for MicroPython. Provides utilities for async programming patterns.
+
+- **Source Repository**: https://github.com/peterhinch/micropython-async
+- **Modules**: `__init__.py`, `pushbutton.py`, `delay_ms.py`
+
+### Host Tools (`tools/`)
+
+#### webrepl_cli.py
+
+CLI tool for WebREPL file operations and REPL access. Used by the parent Makefile for over-the-air firmware updates.
+
+- **Source Repository**: https://github.com/micropython/webrepl

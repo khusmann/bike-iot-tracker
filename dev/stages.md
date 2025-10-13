@@ -15,7 +15,7 @@ Tasks for the current stage are tracked in [tasks.md](tasks.md).
 
 **Status:** ✅ Complete
 
-## Stage 2: BLE Proof-of-Concept (Current)
+## Stage 2: BLE Proof-of-Concept (Completed)
 
 **Goal:** Establish BLE communication between ESP32 and Android app using standard Cycling Speed and Cadence (CSC) profile
 
@@ -36,7 +36,9 @@ Tasks for the current stage are tracked in [tasks.md](tasks.md).
 - BLE connection establishes reliably
 - Data matches physical pedaling rate
 
-## Stage 3: Background Sync Architecture
+**Status:** ✅ Complete
+
+## Stage 3: Background Sync Architecture (Current)
 
 **Goal:** Enable efficient background data synchronization while minimizing phone battery usage
 

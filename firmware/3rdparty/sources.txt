@@ -1,20 +1,24 @@
 # Third-party source files
 # Format: filename url
-webrepl_cli.py https://github.com/micropython/webrepl/raw/1e09d9a1d90fe52aba11d1e659afbc95a50cf088/webrepl_cli.py
-typing.py https://raw.githubusercontent.com/Josverl/micropython-stubs/7972fc8abea23907feae7e34f34a9ecff7a27e3f/mip/typing.py
-aioble/__init__.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/__init__.py
-aioble/core.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/core.py
-aioble/device.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/device.py
-aioble/server.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/server.py
-aioble/peripheral.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/peripheral.py
-udataclasses/__init__.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/__init__.py
-udataclasses/__init__.pyi https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/__init__.pyi
-udataclasses/constants.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/constants.py
-udataclasses/decorator.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/decorator.py
-udataclasses/field.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/field.py
-udataclasses/functions.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/functions.py
-udataclasses/source.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/source.py
-udataclasses/transform_spec.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/transform_spec.py
-primitives/__init__.py https://raw.githubusercontent.com/peterhinch/micropython-async/114f9f1413a7e23f7a4f98099a3a842c590bd698/v3/primitives/__init__.py
-primitives/pushbutton.py https://raw.githubusercontent.com/peterhinch/micropython-async/114f9f1413a7e23f7a4f98099a3a842c590bd698/v3/primitives/pushbutton.py
-primitives/delay_ms.py https://raw.githubusercontent.com/peterhinch/micropython-async/114f9f1413a7e23f7a4f98099a3a842c590bd698/v3/primitives/delay_ms.py
+
+# Host tools
+tools/webrepl_cli.py https://github.com/micropython/webrepl/raw/1e09d9a1d90fe52aba11d1e659afbc95a50cf088/webrepl_cli.py
+
+# Device libraries
+device/typing.py https://raw.githubusercontent.com/Josverl/micropython-stubs/7972fc8abea23907feae7e34f34a9ecff7a27e3f/mip/typing.py
+device/aioble/__init__.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/__init__.py
+device/aioble/core.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/core.py
+device/aioble/device.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/device.py
+device/aioble/server.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/server.py
+device/aioble/peripheral.py https://github.com/micropython/micropython-lib/raw/913498ef05a5b9c28a246d8db64e31f7c12a35e8/micropython/bluetooth/aioble/aioble/peripheral.py
+device/udataclasses/__init__.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/__init__.py
+device/udataclasses/__init__.pyi https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/__init__.pyi
+device/udataclasses/constants.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/constants.py
+device/udataclasses/decorator.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/decorator.py
+device/udataclasses/field.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/field.py
+device/udataclasses/functions.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/functions.py
+device/udataclasses/source.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/source.py
+device/udataclasses/transform_spec.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/transform_spec.py
+device/primitives/__init__.py https://raw.githubusercontent.com/peterhinch/micropython-async/114f9f1413a7e23f7a4f98099a3a842c590bd698/v3/primitives/__init__.py
+device/primitives/pushbutton.py https://raw.githubusercontent.com/peterhinch/micropython-async/114f9f1413a7e23f7a4f98099a3a842c590bd698/v3/primitives/pushbutton.py
+device/primitives/delay_ms.py https://raw.githubusercontent.com/peterhinch/micropython-async/114f9f1413a7e23f7a4f98099a3a842c590bd698/v3/primitives/delay_ms.py

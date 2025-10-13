@@ -1,12 +1,13 @@
 import asyncio
 import struct
 from machine import Pin
-from time import ticks_ms
+from time import ticks_ms, localtime
 from typing import Callable
 import bluetooth
 import aioble
 from udataclasses import dataclass, field
 from primitives import Pushbutton
+from utils import ensure_wifi_connected, sync_ntp_time
 
 # Hardware configuration
 led = Pin(4, Pin.OUT)
@@ -24,6 +25,9 @@ DEVICE_NAME = "BikeTracker"
 # CSC timing constants
 # Time is measured in 1/1024 second units per BLE CSC spec
 TIME_UNIT_HZ = 1024
+
+# Interval for sending notifications when idle (no revolutions) in seconds
+IDLE_NOTIFICATION_INTERVAL_S = 30
 
 
 @dataclass
@@ -102,6 +106,47 @@ def make_reed_press_handler(state: AppState) -> Callable[[], None]:
     return on_reed_press
 
 
+async def serve_connection(
+    connection: aioble.device.DeviceConnection,
+    characteristic: aioble.Characteristic,
+    state: AppState
+) -> None:
+    """
+    Handle a single BLE connection by sending telemetry notifications.
+
+    Args:
+        connection: Active BLE connection to serve
+        characteristic: CSC measurement characteristic to notify on
+        state: Application state containing telemetry data
+    """
+    print(f"Connected to {connection.device}")
+
+    try:
+        while connection.is_connected():
+            current_time = localtime()
+            timestamp = f"{current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"
+            measurement_data = state.telemetry_state.to_csc_measurement()
+
+            characteristic.notify(connection, measurement_data)
+            print(
+                f"[{timestamp}] Notification sent: rev={state.telemetry_state.cumulative_revolutions}"
+            )
+
+            # Wait for new revolution event or timeout for idle notification
+            try:
+                await asyncio.wait_for(
+                    state.new_revolution_event.wait(),
+                    timeout=IDLE_NOTIFICATION_INTERVAL_S
+                )
+                state.new_revolution_event.clear()
+            except asyncio.TimeoutError:
+                print(f"Idle timeout")
+    except Exception as e:
+        print(f"Connection error: {e}")
+    finally:
+        print("Disconnected")
+
+
 async def advertise_and_serve(state: AppState) -> None:
     """
     Main BLE advertising and connection serving loop.
@@ -130,53 +175,18 @@ async def advertise_and_serve(state: AppState) -> None:
     while True:
         print(f"Advertising as '{DEVICE_NAME}'...")
 
-        async with await aioble.advertise(
+        connection = await aioble.advertise(
             interval_us=250_000,  # 250ms advertising interval
             name=DEVICE_NAME,
             services=[CSC_SERVICE_UUID],
             appearance=0x0000,  # Generic appearance
-        ) as connection:
-            print(f"Connected to {connection.device}")
+        )
 
-            try:
-                # Connection handler loop
-                while connection.is_connected():
-                    # Wait for new revolution event or timeout
-                    try:
-                        await asyncio.wait_for(
-                            state.new_revolution_event.wait(),
-                            timeout=30.0
-                        )
-                        state.new_revolution_event.clear()
-
-                        # Send notification with latest telemetry
-                        measurement_data = state.telemetry_state.to_csc_measurement()
-
-                        # Need to check connection right before notify,
-                        # because the connection state could have changed since
-                        # the last event
-                        if connection.is_connected():
-                            csc_measurement_char.notify(
-                                connection, measurement_data)
-                            print(
-                                f"Sent notification: rev={state.telemetry_state.cumulative_revolutions}")
-
-                    except asyncio.TimeoutError:
-                        # Periodic keepalive - send current state even if no new data
-                        measurement_data = state.telemetry_state.to_csc_measurement()
-                        if connection.is_connected():
-                            csc_measurement_char.notify(
-                                connection, measurement_data)
-                            print("Keepalive notification sent")
-
-            except Exception as e:
-                print(f"Connection error: {e}")
-            finally:
-                print("Disconnected")
+        await serve_connection(connection, csc_measurement_char, state)
 
 
 async def main() -> None:
-    """Main entry point - start BLE peripheral"""
+    """Main entry point - ensure WiFi/NTP then start BLE peripheral"""
 
     # Create application state
     state = AppState()
@@ -189,6 +199,12 @@ async def main() -> None:
     print("Starting BikeTracker firmware...")
     print(f"LED on GPIO {led}")
     print(f"Reed switch on GPIO {reed}")
+
+    # Ensure WiFi is connected
+    await ensure_wifi_connected(led=led)
+
+    # Sync NTP clock
+    await sync_ntp_time(led=led)
 
     # Start BLE peripheral with state
     await advertise_and_serve(state)
