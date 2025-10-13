@@ -123,7 +123,7 @@ async def serve_connection(
         state: Application state containing telemetry data
     """
     def log_connection(s: str):
-        log(f"[{connection.device}] {s}")
+        log(f"[{connection.device.addr_hex()}] {s}")
 
     log_connection("Connected")
 
