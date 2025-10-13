@@ -73,8 +73,8 @@ class Pushbutton:
 
     def release_func(
         self,
-        func: Callable[..., Any] | None | bool = False,
-        args: Tuple[Any, ...] = ()
+        func: Callable[[Unpack[P]], R] | None | bool = False,
+        args: Tuple[Unpack[P]] = ()
     ) -> None:
         """
         Set callback for button release event.
@@ -89,8 +89,8 @@ class Pushbutton:
 
     def double_func(
         self,
-        func: Callable[..., Any] | None | bool = False,
-        args: Tuple[Any, ...] = ()
+        func: Callable[[Unpack[P]], R] | None | bool = False,
+        args: Tuple[Unpack[P]] = ()
     ) -> None:
         """
         Set callback for double-click event.
@@ -105,8 +105,8 @@ class Pushbutton:
 
     def long_func(
         self,
-        func: Callable[..., Any] | None | bool = False,
-        args: Tuple[Any, ...] = ()
+        func: Callable[[Unpack[P]], R] | None | bool = False,
+        args: Tuple[Unpack[P]] = ()
     ) -> None:
         """
         Set callback for long press event.
