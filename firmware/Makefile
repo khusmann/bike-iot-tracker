@@ -19,7 +19,7 @@ BOOT_FILES := $(shell find -L $(BOOT_DIR) -type f -name '*.py')
 # Find all Python files in 3rdparty/device directory (libraries to push to device)
 THIRDPARTY_FILES := $(shell find -L $(THIRDPARTY_DEVICE_DIR) -type f -name '*.py')
 
-.PHONY: help repl push push-boot push-lib push-local repl-local update-3rdparty
+.PHONY: help repl push push-boot push-lib push-boot-local repl-local update-3rdparty
 
 help:
 	@echo "Available commands:"
@@ -27,7 +27,7 @@ help:
 	@echo "  make push            - Push src files to device via WebREPL"
 	@echo "  make push-boot       - Push boot files to device via WebREPL"
 	@echo "  make push-lib        - Push 3rdparty files and device.env to device via WebREPL"
-	@echo "  make push-local      - Push boot files to device via serial (for initial setup)"
+	@echo "  make push-boot-local - Push boot files to device via serial (for initial setup)"
 	@echo "  make repl-local      - Connect to REPL via serial"
 	@echo "  make update-3rdparty - Update all third-party dependencies"
 
@@ -37,6 +37,8 @@ repl:
 	$(WEBREPL_CLI) $(WEBREPL_IP):$(WEBREPL_PORT)
 
 push-boot:
+	@echo "Pushing device.env..."
+	@$(WEBREPL_CLI) .env $(WEBREPL_IP):$(WEBREPL_PORT):device.env
 	@for file in $(BOOT_FILES); do \
 		relative=$$(echo $$file | sed 's|^$(SRC_DIR)/||'); \
 		echo "Pushing $$relative..."; \
@@ -51,8 +53,6 @@ push:
 	done
 
 push-lib:
-	@echo "Pushing device.env..."
-	@$(WEBREPL_CLI) .env $(WEBREPL_IP):$(WEBREPL_PORT):device.env
 	@for file in $(THIRDPARTY_FILES); do \
 		relative=$$(echo $$file | sed 's|^$(THIRDPARTY_DEVICE_DIR)/||'); \
 		echo "Pushing $$relative..."; \
@@ -60,7 +60,7 @@ push-lib:
 	done
 
 # Push enough to get the WebREPL running
-push-local:
+push-boot-local:
 	$(MPREMOTE) connect $(SERIAL_PORT) fs cp .env :device.env
 	@for file in $(BOOT_FILES); do \
 		relative=$$(echo $$file | sed 's|^$(BOOT_DIR)/||'); \
