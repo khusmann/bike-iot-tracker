@@ -21,25 +21,25 @@ Tasks for **Stage 2: BLE Proof-of-Concept**
 
 ### Project Setup
 
-- [ ] Create new Android project with Kotlin
-- [ ] Add BLE permissions to manifest (BLUETOOTH_SCAN, BLUETOOTH_CONNECT, etc.)
-- [ ] Set up basic project structure with functional architecture
+- [x] Create new Android project with Kotlin
+- [x] Add BLE permissions to manifest (BLUETOOTH_SCAN, BLUETOOTH_CONNECT, etc.)
+- [x] Set up basic project structure with functional architecture
 
 ### BLE Implementation
 
-- [ ] Implement BLE scanner with CSC service UUID filter (0x1816)
-- [ ] Create BLE connection manager
-- [ ] Subscribe to CSC Measurement characteristic notifications
-- [ ] Parse CSC Measurement data (cumulative revolutions, last event time)
-- [ ] Calculate instantaneous cadence from CSC data
+- [x] Implement BLE scanner with CSC service UUID filter (0x1816)
+- [x] Create BLE connection manager
+- [x] Subscribe to CSC Measurement characteristic notifications
+- [x] Parse CSC Measurement data (cumulative revolutions, last event time)
+- [x] Calculate instantaneous cadence from CSC data
 
 ### UI
 
-- [ ] Create main activity with connection status indicator
-- [ ] Display current cadence (RPM)
-- [ ] Display total revolution count
-- [ ] Show BLE connection state (scanning/connected/disconnected)
-- [ ] Add simple styling for readability
+- [x] Create main activity with connection status indicator
+- [x] Display current cadence (RPM)
+- [x] Display total revolution count
+- [x] Show BLE connection state (scanning/connected/disconnected)
+- [x] Add simple styling for readability
 
 ### Testing
 
@@ -50,6 +50,6 @@ Tasks for **Stage 2: BLE Proof-of-Concept**
 
 ## Documentation
 
-- [ ] Document CSC profile implementation details
-- [ ] Add setup instructions for running the Android app
-- [ ] Document known limitations or issues
+- [x] Document CSC profile implementation details
+- [x] Add setup instructions for running the Android app
+- [x] Document known limitations or issues

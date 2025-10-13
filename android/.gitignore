@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+.gradletasknamecache
+
+# Android Studio
+.idea/
+*.iml
+.DS_Store
+local.properties
+
+# Build outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Log Files
+*.log
+
+# Android
+captures/
+.externalNativeBuild
+.cxx
