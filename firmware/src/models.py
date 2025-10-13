@@ -13,7 +13,7 @@ from udataclasses import dataclass, field
 
 
 @dataclass
-class Telemetry:
+class CrankTelemetry:
     """Crank telemetry tracking.
 
     Attributes:

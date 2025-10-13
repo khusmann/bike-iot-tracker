@@ -41,7 +41,7 @@ def on_reed_press(state: AppState) -> None:
     # Toggle LED for visual feedback
     led.value(not led.value())
 
-    log(f"Revolution {state.telemetry_manager.current_telemetry.cumulative_revolutions}")
+    log(f"Revolution {state.telemetry_manager.crank_telemetry.cumulative_revolutions}")
 
 
 async def advertise_and_serve(state: AppState) -> None:

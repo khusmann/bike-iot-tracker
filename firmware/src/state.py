@@ -9,7 +9,7 @@ import time
 import typing as t
 from dataclasses import dataclass, field
 
-from models import Session, SessionStore, Telemetry
+from models import Session, SessionStore, CrankTelemetry
 from storage import read_session_store, write_session_store
 from utils import log
 
@@ -26,7 +26,7 @@ class TelemetryManager:
     # Time is measured in 1/1024 second units per BLE CSC spec
     TIME_UNIT_HZ: t.ClassVar[int] = 1024
 
-    current_telemetry: Telemetry = field(default_factory=Telemetry)
+    crank_telemetry: CrankTelemetry = field(default_factory=CrankTelemetry)
 
     def record_revolution(self) -> None:
         """Record a new revolution by updating state in place."""
@@ -38,12 +38,12 @@ class TelemetryManager:
         wrapped_time = time_in_units & 0xFFFF
         # Wrap at 32 bits per spec
         wrapped_revolutions = (
-            self.current_telemetry.cumulative_revolutions + 1
+            self.crank_telemetry.cumulative_revolutions + 1
         ) & 0xFFFFFFFF  # Wrap at 32 bits
 
-        self.current_telemetry.cumulative_revolutions = wrapped_revolutions
-        self.current_telemetry.last_event_time = wrapped_time
-        self.current_telemetry.last_physical_time_ms = current_time_ms
+        self.crank_telemetry.cumulative_revolutions = wrapped_revolutions
+        self.crank_telemetry.last_event_time = wrapped_time
+        self.crank_telemetry.last_physical_time_ms = current_time_ms
 
 
 @dataclass

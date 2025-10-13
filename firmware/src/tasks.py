@@ -57,7 +57,7 @@ async def session_idle_timeout(
 
         # Check time since last crank event
         current_time_ms = ticks_ms()
-        last_event_ms = state.telemetry_manager.current_telemetry.last_physical_time_ms
+        last_event_ms = state.telemetry_manager.crank_telemetry.last_physical_time_ms
 
         # Handle the case where no events have happened yet
         if last_event_ms == 0:
@@ -116,17 +116,17 @@ async def ble_serve_connection(
 
     tm = state.telemetry_manager
 
-    last_seen_revolution = tm.current_telemetry.cumulative_revolutions
+    last_seen_revolution = tm.crank_telemetry.cumulative_revolutions
     last_notification_ms = ticks_ms()
     notification_type: t.Literal["INIT", "REVOLUTION", "IDLE", "NONE"] = "INIT"
 
     try:
         while connection.is_connected():
-            current_revolution = tm.current_telemetry.cumulative_revolutions
+            current_revolution = tm.crank_telemetry.cumulative_revolutions
             elapsed_s = (ticks_ms() - last_notification_ms) / 1000
 
             if notification_type != "NONE":
-                measurement_data = tm.current_telemetry.to_csc_measurement()
+                measurement_data = tm.crank_telemetry.to_csc_measurement()
                 characteristic.notify(connection, measurement_data)
                 log_connection(
                     f"Notification {notification_type}: rev={current_revolution}"
