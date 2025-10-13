@@ -39,7 +39,8 @@ companion app.
   - `WorkManager` for periodic background syncs
   - BLE connections under 30 seconds
   - No persistent foreground service
-- Functional style with immutable data structures
+- Prefer functional style with immutable data structures (but if mutable is more
+  idiomatic, e.g. a Python class representing a service, then mutable is fine)
 - Prioritize simplicity
 
 ### General Philosophy

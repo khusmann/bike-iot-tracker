@@ -6,11 +6,35 @@ Tasks for **Stage 3: Background Sync Architecture**
 
 ### F1. Session Storage
 
-- [ ] F1.1 Design session data structure (timestamp, duration, revolution count)
-- [ ] F1.2 Implement persistent storage using filesystem or NVS
-- [ ] F1.3 Create session boundary detection (idle timeout logic)
-- [ ] F1.4 Store sessions locally with unique IDs
-- [ ] F1.5 Handle storage cleanup for synced sessions
+- [ ] F1.1 Design session data structure
+  - Create `Session` dataclass with: id, start_time, end_time, revolutions, synced
+  - Create `SessionStore` dataclass with: sessions list, next_id counter
+  - Define JSON serialization/deserialization functions
+- [ ] F1.2 Implement filesystem storage module
+  - Create `storage.py` with functions to load/save sessions from/to `sessions.json`
+  - Implement atomic file writes (write to temp file, then rename)
+  - Handle missing file case (initialize empty store)
+  - Add error handling for file I/O operations
+- [ ] F1.3 Implement session management module
+  - Create `session_manager.py` with `SessionManager` class
+  - Track current active session (or None if idle)
+  - Implement `start_session()` - creates new session with current timestamp
+  - Implement `end_session()` - finalizes current session, saves to storage
+  - Implement `get_unsynced_sessions()` - returns list of sessions where synced=False
+- [ ] F1.4 Add session boundary detection with 10-minute idle timeout
+  - Add idle timeout task that monitors `last_physical_time_ms`
+  - When 10 minutes pass without crank event, call `end_session()`
+  - Reset timeout on each crank revolution
+  - Auto-start new session on first crank after idle period
+- [ ] F1.5 Add periodic active session persistence (every 5 minutes)
+  - Create background task that saves active session every 5 minutes
+  - Update active session's `end_time` and `revolutions` before saving
+  - Ensure this doesn't interfere with idle timeout logic
+- [ ] F1.6 Integrate session tracking with existing main.py
+  - Add SessionManager to AppState
+  - Update `on_reed_press()` to notify session manager of new revolution
+  - Start session management tasks in `main()`
+  - Keep existing CSC broadcast running (no changes to BLE code)
 
 ### F2. Sync Protocol
 
