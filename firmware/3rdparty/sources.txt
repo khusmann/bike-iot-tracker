@@ -17,3 +17,4 @@ udataclasses/source.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0
 udataclasses/transform_spec.py https://github.com/dhrosa/udataclasses/raw/971f30edb7f1a0217da34d3c116fecbbaab7c76d/src/udataclasses/transform_spec.py
 primitives/__init__.py https://raw.githubusercontent.com/peterhinch/micropython-async/114f9f1413a7e23f7a4f98099a3a842c590bd698/v3/primitives/__init__.py
 primitives/pushbutton.py https://raw.githubusercontent.com/peterhinch/micropython-async/114f9f1413a7e23f7a4f98099a3a842c590bd698/v3/primitives/pushbutton.py
+primitives/delay_ms.py https://raw.githubusercontent.com/peterhinch/micropython-async/114f9f1413a7e23f7a4f98099a3a842c590bd698/v3/primitives/delay_ms.py
