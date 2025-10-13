@@ -132,22 +132,23 @@ async def serve_connection(
     try:
         while connection.is_connected():
             current_revolution = state.telemetry_state.cumulative_revolutions
+            elapsed_s = (ticks_ms() - last_notification_ms) / 1000
 
             if current_revolution > last_seen_revolution:
-                # New revolution detected - send notification immediately
                 last_seen_revolution = current_revolution
+                notification_type = "REVOLUTION"
+            elif elapsed_s >= IDLE_NOTIFICATION_INTERVAL_S:
+                notification_type = "IDLE"
+            else:
+                notification_type = "NONE"
+
+            if notification_type != "NONE":
                 measurement_data = state.telemetry_state.to_csc_measurement()
                 characteristic.notify(connection, measurement_data)
-                log_connection(f"Notification: rev={current_revolution}")
+                log_connection(
+                    f"Notification {notification_type}: rev={current_revolution}"
+                )
                 last_notification_ms = ticks_ms()
-            else:
-                # No new revolution - check if we need idle notification
-                elapsed_s = (ticks_ms() - last_notification_ms) / 1000
-                if elapsed_s >= IDLE_NOTIFICATION_INTERVAL_S:
-                    measurement_data = state.telemetry_state.to_csc_measurement()
-                    characteristic.notify(connection, measurement_data)
-                    log_connection(f"Idle notification")
-                    last_notification_ms = ticks_ms()
 
             # Sleep briefly for responsiveness to disconnection
             await asyncio.sleep(1)
