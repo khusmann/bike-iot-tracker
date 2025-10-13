@@ -38,18 +38,88 @@ Tasks for **Stage 3: Background Sync Architecture**
 
 ### F2. Sync Protocol
 
-- [ ] F2.1 Design custom BLE service for sync protocol
-- [ ] F2.2 Implement "query available sessions" characteristic
-- [ ] F2.3 Implement "request session data" characteristic
-- [ ] F2.4 Implement "mark as synced" characteristic
-- [ ] F2.5 Add session transfer with chunking if needed
-- [ ] F2.6 Ensure atomic sync operations
+#### Protocol Specification
+
+**Service:**
+- UUID: `0000FF00-0000-1000-8000-00805f9b34fb`
+- Name: Bike Tracker Sync Service
+
+**Characteristics:**
+```
+├─ Session Range (0xFF01) [READ]  → JSON: {"start": 0, "count": 10}
+├─ Session Data  (0xFF02) [WRITE] → Write: uint16 session_id, Response: JSON session
+└─ Mark Synced   (0xFF03) [WRITE] → uint16 session_id, Response: empty/ack
+```
+
+**Design Pattern:**
+- Uses BLE's built-in write-with-response mechanism
+- Simple request/response: write session_id, get JSON back synchronously
+- No notifications needed (overkill for periodic sync)
+- 3 characteristics total (minimal, clean)
+
+**Data Formats:**
+- Session Range: JSON, `{"start": 0, "count": 10}` (~25 bytes)
+- Session Data Write: Binary uint16 little-endian (2 bytes)
+- Session Data Response: JSON, `{"id": 0, "start_time": 1728849600, "end_time": 1728851400, "revolutions": 1234, "synced": false}` (~95 bytes)
+- Mark Synced Write: Binary uint16 little-endian (2 bytes)
+
+**Sync Flow:**
+1. Android connects to ESP32
+2. Android reads Session Range characteristic → `{"start": 0, "count": 10}`
+3. For each session ID in [start, start+count):
+   - Android writes session_id to Session Data characteristic
+   - ESP32 returns JSON session in write response (or error if synced/missing)
+   - Android stores session locally
+   - Android writes session_id to Mark Synced characteristic
+4. Android disconnects
+
+**Gap Handling:**
+- Client requests all IDs in range
+- Server returns error/empty for already-synced sessions
+- Simple, tolerates gaps without complex multi-range logic
+
+**Error Handling:**
+- Sessions marked synced only after Android confirms storage
+- Connection drops leave sessions unsynced for retry next sync
+- No chunking initially (sessions < 100 bytes, well within MTU)
+
+#### Tasks
+
+- [ ] F2.1 Create sync service with UUID 0000FF00-0000-1000-8000-00805f9b34fb
+- [ ] F2.2 Register Session Range characteristic (0xFF01, READ)
+- [ ] F2.3 Register Session Data characteristic (0xFF02, WRITE with response)
+- [ ] F2.4 Register Mark Synced characteristic (0xFF03, WRITE with response)
+- [ ] F2.5 Implement Session Range read handler
+  - Get unsynced sessions from SessionManager
+  - Calculate start (first unsynced session ID) and count
+  - Return JSON: `{"start": N, "count": M}`
+- [ ] F2.6 Implement Session Data write handler
+  - Parse uint16 session_id from write data (little-endian)
+  - Lookup session in SessionManager
+  - Return session JSON in write response (or error if not found/synced)
+- [ ] F2.7 Implement Mark Synced write handler
+  - Parse uint16 session_id from write data (little-endian)
+  - Call SessionManager.mark_session_synced(session_id)
+  - Return success/ack in write response
+- [ ] F2.8 Extend test_ble_client.py to test sync protocol
+  - Add Sync Service UUIDs and characteristic UUIDs (0xFF00, 0xFF01, 0xFF02, 0xFF03)
+  - Add `SyncClient` class for sync operations
+  - Implement `read_session_range()` - reads Session Range characteristic, parses JSON
+  - Implement `request_session(session_id)` - writes uint16 to Session Data, parses JSON response
+  - Implement `mark_synced(session_id)` - writes uint16 to Mark Synced characteristic
+  - Add `sync_all_sessions()` function that orchestrates full sync flow:
+    - Read session range
+    - For each session in range: request → parse → mark synced
+    - Print summary of synced sessions
+  - Add command-line argument to choose mode: `--monitor` (CSC) or `--sync` (sync protocol)
+  - Test with multiple sessions, verify JSON parsing
+  - Test connection drops mid-sync (manual disconnect)
 
 ### F3. Integration & Testing
 
 - [ ] F3.1 Test session persistence across reboots
 - [ ] F3.2 Verify session boundary detection with various idle periods
-- [ ] F3.3 Test sync protocol with multiple unsyncced sessions
+- [ ] F3.3 Test sync protocol with multiple unsynced sessions
 - [ ] F3.4 Ensure WiFi/WebREPL still works for development
 
 ## Android App Tasks
@@ -74,11 +144,12 @@ Tasks for **Stage 3: Background Sync Architecture**
 ### A3. Sync Implementation
 
 - [ ] A3.1 Create BLE sync service/manager
-- [ ] A3.2 Implement session query from ESP32
-- [ ] A3.3 Implement session data transfer
+- [ ] A3.2 Implement session range read from ESP32
+- [ ] A3.3 Implement session data transfer (request + receive)
 - [ ] A3.4 Parse and store sessions in local database
 - [ ] A3.5 Send "mark as synced" confirmation to ESP32
 - [ ] A3.6 Handle sync errors and retries gracefully
+- [ ] A3.7 Negotiate higher MTU on connection (request 512 bytes)
 
 ### A4. UI Updates
 
