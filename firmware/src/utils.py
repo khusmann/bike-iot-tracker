@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import asyncio
 import network
 import ntptime
-from machine import Pin
-from time import localtime
 import typing as t
 import uos
+from machine import Pin
+from time import localtime
 
 # LED blink patterns (sequence of on/off durations in seconds)
 SIMPLE_BLINK_PATTERN = [0.5, 0.5]  # Simple blink: on 0.5s, off 0.5s

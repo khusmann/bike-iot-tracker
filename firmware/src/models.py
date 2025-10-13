@@ -3,10 +3,13 @@ Session data structures and JSON serialization.
 
 Defines the core data model for tracking cycling sessions.
 """
-import typing as t
-import struct
-from udataclasses import dataclass, field
+from __future__ import annotations
+
 import json
+import struct
+import typing as t
+
+from udataclasses import dataclass, field
 
 
 @dataclass

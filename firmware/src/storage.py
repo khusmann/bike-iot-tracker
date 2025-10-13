@@ -4,7 +4,10 @@ Filesystem storage for session data.
 Handles persistent storage of sessions to the ESP32 filesystem with
 atomic write operations for data integrity.
 """
+from __future__ import annotations
+
 import os
+
 from models import SessionStore
 from utils import log, atomic_write
 

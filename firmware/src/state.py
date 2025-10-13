@@ -3,9 +3,12 @@ Session management for tracking cycling sessions.
 
 Manages the lifecycle of sessions: starting, ending, updating, and persisting.
 """
-import typing as t
+from __future__ import annotations
+
 import time
+import typing as t
 from dataclasses import dataclass, field
+
 from models import Session, SessionStore, Telemetry
 from storage import read_session_store, write_session_store
 from utils import log

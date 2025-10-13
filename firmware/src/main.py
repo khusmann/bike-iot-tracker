@@ -1,10 +1,12 @@
 import asyncio
 import bluetooth
+from machine import Pin
+
 import aioble
 from primitives import Pushbutton
-from machine import Pin
-from state import AppState
+
 import tasks
+from state import AppState
 from utils import ensure_wifi_connected, sync_ntp_time, log
 
 # Hardware configuration

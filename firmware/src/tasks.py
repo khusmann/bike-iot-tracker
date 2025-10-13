@@ -5,10 +5,14 @@ All async background tasks are defined here. This centralizes task
 orchestration and makes the concurrent structure of the application
 easy to understand.
 """
+from __future__ import annotations
+
 import asyncio
-from time import ticks_ms, ticks_diff
 import typing as t
+from time import ticks_ms, ticks_diff
+
 import aioble
+
 from state import SessionManager, AppState
 from utils import log
 
