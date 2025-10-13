@@ -2,13 +2,13 @@ import asyncio
 import struct
 from machine import Pin
 from time import ticks_ms
-from typing import Callable
 import bluetooth
 import aioble
-import typing as t
 from udataclasses import dataclass, field
 from primitives import Pushbutton
 from utils import ensure_wifi_connected, sync_ntp_time, log
+from session_manager import SessionManager
+import tasks
 
 # Hardware configuration
 led = Pin(4, Pin.OUT)
@@ -26,12 +26,6 @@ DEVICE_NAME = "BikeTracker"
 # CSC timing constants
 # Time is measured in 1/1024 second units per BLE CSC spec
 TIME_UNIT_HZ = 1024
-
-# Interval for sending notifications when idle (no revolutions) in seconds
-IDLE_NOTIFICATION_INTERVAL_S = 30
-
-# Connection loop polling interval in seconds
-CONNECTION_POLL_INTERVAL_S = 1
 
 
 @dataclass
@@ -79,89 +73,23 @@ class AppState:
     Encapsulates all mutable state in one place to avoid module-level globals.
     """
     telemetry_state: TelemetryState = field(default_factory=TelemetryState)
+    session_manager: SessionManager = field(default_factory=SessionManager)
 
 
-def make_reed_press_handler(state: AppState) -> Callable[[], None]:
-    """
-    Create a reed switch press handler with access to state.
+def on_reed_press(state: AppState) -> None:
+    """Handler for reed switch press - updates telemetry on crank rotation"""
+    current_time_ms = ticks_ms()
 
-    Args:
-        state: Application state object
+    # Update telemetry state in place
+    state.telemetry_state.record_revolution(current_time_ms)
 
-    Returns:
-        Handler function for reed switch press events
-    """
-    def on_reed_press() -> None:
-        """Handler for reed switch press - updates telemetry on crank rotation"""
-        current_time_ms = ticks_ms()
+    # Record revolution in session manager
+    state.session_manager.record_revolution()
 
-        # Update telemetry state in place
-        state.telemetry_state.record_revolution(current_time_ms)
+    # Toggle LED for visual feedback
+    led.value(not led.value())
 
-        # Toggle LED for visual feedback
-        led.value(not led.value())
-
-        log(f"Revolution {state.telemetry_state.cumulative_revolutions}")
-
-    return on_reed_press
-
-
-async def serve_connection(
-    connection: aioble.device.DeviceConnection,
-    characteristic: aioble.Characteristic,
-    state: AppState
-) -> None:
-    """
-    Handle a single BLE connection by sending telemetry notifications.
-
-    Runs as an independent task per connection, enabling concurrent
-    multi-device support.
-
-    Args:
-        connection: Active BLE connection to serve
-        characteristic: CSC measurement characteristic to notify on
-        state: Application state containing telemetry data
-    """
-    def log_connection(s: str):
-        log(f"[{connection.device.addr_hex()}] {s}")
-
-    log_connection("Connected")
-
-    # Give client time to enable notifications (descriptor write)
-    await asyncio.sleep(1.5)
-
-    last_seen_revolution = state.telemetry_state.cumulative_revolutions
-    last_notification_ms = ticks_ms()
-    notification_type: t.Literal["INIT", "REVOLUTION", "IDLE", "NONE"] = "INIT"
-
-    try:
-        while connection.is_connected():
-            current_revolution = state.telemetry_state.cumulative_revolutions
-            elapsed_s = (ticks_ms() - last_notification_ms) / 1000
-
-            if notification_type != "NONE":
-                measurement_data = state.telemetry_state.to_csc_measurement()
-                characteristic.notify(connection, measurement_data)
-                log_connection(
-                    f"Notification {notification_type}: rev={current_revolution}"
-                )
-                last_notification_ms = ticks_ms()
-
-            # Sleep briefly for responsiveness to disconnection
-            await asyncio.sleep(CONNECTION_POLL_INTERVAL_S)
-
-            if current_revolution > last_seen_revolution:
-                last_seen_revolution = current_revolution
-                notification_type = "REVOLUTION"
-            elif elapsed_s >= IDLE_NOTIFICATION_INTERVAL_S:
-                notification_type = "IDLE"
-            else:
-                notification_type = "NONE"
-
-    except Exception as e:
-        log_connection(f"Connection error: {e}")
-    finally:
-        log_connection(f"Disconnected")
+    log(f"Revolution {state.telemetry_state.cumulative_revolutions}")
 
 
 async def advertise_and_serve(state: AppState) -> None:
@@ -204,8 +132,9 @@ async def advertise_and_serve(state: AppState) -> None:
 
         # Spawn connection handler as independent task
         # This allows immediate return to advertising for multi-device support
-        asyncio.create_task(serve_connection(
-            connection, csc_measurement_char, state))
+        asyncio.create_task(
+            tasks.ble_serve_connection(connection, csc_measurement_char, state)
+        )
 
         log(f"Connection spawned, returning to advertising...")
 
@@ -213,13 +142,13 @@ async def advertise_and_serve(state: AppState) -> None:
 async def main() -> None:
     """Main entry point - ensure WiFi/NTP then start BLE peripheral"""
 
-    # Create application state
+    # Create application state (session manager initialized via default_factory)
     state = AppState()
 
     # Set up reed switch using Pushbutton primitive
     # sense=1 because reed switch is active-low (PULL_UP, closed = 0)
     reed_button = Pushbutton(reed, sense=1)
-    reed_button.press_func(make_reed_press_handler(state))
+    reed_button.press_func(on_reed_press, (state, ))
 
     log("Starting BikeTracker firmware...")
     log(f"LED on GPIO {led}")
@@ -230,6 +159,17 @@ async def main() -> None:
 
     # Sync NTP clock
     await sync_ntp_time(led=led)
+
+    # Start background tasks
+    asyncio.create_task(
+        tasks.session_idle_timeout(state.session_manager, state)
+    )
+
+    asyncio.create_task(
+        tasks.session_periodic_save(state.session_manager)
+    )
+
+    log("Background tasks started")
 
     # Start BLE peripheral with state
     await advertise_and_serve(state)
