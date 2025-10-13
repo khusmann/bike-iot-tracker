@@ -26,26 +26,23 @@ DEVICE_NAME = "BikeTracker"
 TIME_UNIT_HZ = 1024
 
 
-@dataclass(frozen=True)
+@dataclass
 class TelemetryState:
-    """Immutable state for crank telemetry tracking"""
+    """Mutable state for crank telemetry tracking"""
     cumulative_revolutions: int = 0
     last_event_time: int = 0
     last_physical_time_ms: int = 0
 
-    def with_new_revolution(self, current_time_ms: int) -> 'TelemetryState':
-        """Return new state with incremented revolution count"""
+    def record_revolution(self, current_time_ms: int) -> None:
+        """Record a new revolution by updating state in place"""
         # Convert milliseconds to 1/1024 second units
         time_in_units = (current_time_ms * TIME_UNIT_HZ) // 1000
         # Wrap at 16 bits (0-65535) per BLE spec
         wrapped_time = time_in_units & 0xFFFF
 
-        return TelemetryState(
-            cumulative_revolutions=(
-                self.cumulative_revolutions + 1) & 0xFFFFFFFF,  # Wrap at 32 bits
-            last_event_time=wrapped_time,
-            last_physical_time_ms=current_time_ms
-        )
+        self.cumulative_revolutions = (self.cumulative_revolutions + 1) & 0xFFFFFFFF  # Wrap at 32 bits
+        self.last_event_time = wrapped_time
+        self.last_physical_time_ms = current_time_ms
 
     def to_csc_measurement(self) -> bytes:
         """
@@ -71,7 +68,6 @@ class AppState:
     Mutable application state container.
 
     Encapsulates all mutable state in one place to avoid module-level globals.
-    The telemetry_state field itself is immutable and updated functionally.
     """
     telemetry_state: TelemetryState = field(default_factory=TelemetryState)
     new_revolution_event: asyncio.Event = field(default_factory=asyncio.Event)
@@ -91,9 +87,8 @@ def make_reed_press_handler(state: AppState) -> Callable[[], None]:
         """Handler for reed switch press - updates telemetry on crank rotation"""
         current_time_ms = ticks_ms()
 
-        # Update telemetry state (functional style)
-        state.telemetry_state = state.telemetry_state.with_new_revolution(
-            current_time_ms)
+        # Update telemetry state in place
+        state.telemetry_state.record_revolution(current_time_ms)
 
         # Toggle LED for visual feedback
         led.value(not led.value())
