@@ -75,7 +75,6 @@ class AppState:
     Encapsulates all mutable state in one place to avoid module-level globals.
     """
     telemetry_state: TelemetryState = field(default_factory=TelemetryState)
-    new_revolution_event: asyncio.Event = field(default_factory=asyncio.Event)
 
 
 def make_reed_press_handler(state: AppState) -> Callable[[], None]:
@@ -98,9 +97,6 @@ def make_reed_press_handler(state: AppState) -> Callable[[], None]:
         # Toggle LED for visual feedback
         led.value(not led.value())
 
-        # Signal that new data is available
-        state.new_revolution_event.set()
-
         print(f"Revolution {state.telemetry_state.cumulative_revolutions}")
 
     return on_reed_press
@@ -114,6 +110,9 @@ async def serve_connection(
     """
     Handle a single BLE connection by sending telemetry notifications.
 
+    Runs as an independent task per connection, enabling concurrent
+    multi-device support.
+
     Args:
         connection: Active BLE connection to serve
         characteristic: CSC measurement characteristic to notify on
@@ -121,41 +120,56 @@ async def serve_connection(
     """
     print(f"Connected to {connection.device}")
 
+    # Give client time to enable notifications (descriptor write)
+    await asyncio.sleep(1.5)
+
+    last_seen_revolution = state.telemetry_state.cumulative_revolutions
+    last_notification_ms = ticks_ms()
+
     try:
-        # Give client time to enable notifications (descriptor write)
-        await asyncio.sleep(1.5)
-
         while connection.is_connected():
-            current_time = localtime()
-            timestamp = f"{current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"
-            measurement_data = state.telemetry_state.to_csc_measurement()
+            current_revolution = state.telemetry_state.cumulative_revolutions
 
-            characteristic.notify(connection, measurement_data)
-            print(
-                f"[{timestamp}] Notification sent: rev={state.telemetry_state.cumulative_revolutions}"
-            )
+            if current_revolution > last_seen_revolution:
+                # New revolution detected - send notification immediately
+                last_seen_revolution = current_revolution
+                current_time = localtime()
+                timestamp = f"{current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"
+                measurement_data = state.telemetry_state.to_csc_measurement()
+                characteristic.notify(connection, measurement_data)
+                print(
+                    f"[{timestamp}] [{connection.device}] Notification: rev={current_revolution}")
+                last_notification_ms = ticks_ms()
+            else:
+                # No new revolution - check if we need idle notification
+                elapsed_s = (ticks_ms() - last_notification_ms) / 1000
+                if elapsed_s >= IDLE_NOTIFICATION_INTERVAL_S:
+                    current_time = localtime()
+                    timestamp = f"{current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"
+                    measurement_data = state.telemetry_state.to_csc_measurement()
+                    characteristic.notify(connection, measurement_data)
+                    print(
+                        f"[{timestamp}] [{connection.device}] Idle notification")
+                    last_notification_ms = ticks_ms()
 
-            # Wait for new revolution event or timeout for idle notification
-            try:
-                await asyncio.wait_for(
-                    state.new_revolution_event.wait(),
-                    timeout=IDLE_NOTIFICATION_INTERVAL_S
-                )
-                state.new_revolution_event.clear()
-            except asyncio.TimeoutError:
-                print(f"Idle timeout")
+            # Sleep briefly for responsiveness to disconnection
+            await asyncio.sleep(1)
+
     except Exception as e:
         print(f"Connection error: {e}")
     finally:
-        print("Disconnected")
+        print(f"Disconnected from {connection.device}")
 
 
 async def advertise_and_serve(state: AppState) -> None:
     """
-    Main BLE advertising and connection serving loop.
+    Main BLE advertising loop that spawns independent connection tasks.
+
+    Like a web server, continues advertising after accepting connections,
+    enabling multiple concurrent devices (up to 3-4 on ESP32).
 
     Args:
-        state: Application state object containing telemetry and event data
+        state: Application state object containing telemetry data
     """
     # Register CSC Service
     csc_service = aioble.Service(CSC_SERVICE_UUID)
@@ -185,7 +199,12 @@ async def advertise_and_serve(state: AppState) -> None:
             appearance=0x0000,  # Generic appearance
         )
 
-        await serve_connection(connection, csc_measurement_char, state)
+        # Spawn connection handler as independent task
+        # This allows immediate return to advertising for multi-device support
+        asyncio.create_task(serve_connection(
+            connection, csc_measurement_char, state))
+
+        print(f"Connection spawned, returning to advertising...")
 
 
 async def main() -> None:
