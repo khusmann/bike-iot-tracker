@@ -40,7 +40,8 @@ class TelemetryState:
         # Wrap at 16 bits (0-65535) per BLE spec
         wrapped_time = time_in_units & 0xFFFF
 
-        self.cumulative_revolutions = (self.cumulative_revolutions + 1) & 0xFFFFFFFF  # Wrap at 32 bits
+        self.cumulative_revolutions = (
+            self.cumulative_revolutions + 1) & 0xFFFFFFFF  # Wrap at 32 bits
         self.last_event_time = wrapped_time
         self.last_physical_time_ms = current_time_ms
 
@@ -150,17 +151,23 @@ async def advertise_and_serve(state: AppState) -> None:
 
                         # Send notification with latest telemetry
                         measurement_data = state.telemetry_state.to_csc_measurement()
-                        csc_measurement_char.notify(
-                            connection, measurement_data)
-                        print(
-                            f"Sent notification: rev={state.telemetry_state.cumulative_revolutions}")
+
+                        # Need to check connection right before notify,
+                        # because the connection state could have changed since
+                        # the last event
+                        if connection.is_connected():
+                            csc_measurement_char.notify(
+                                connection, measurement_data)
+                            print(
+                                f"Sent notification: rev={state.telemetry_state.cumulative_revolutions}")
 
                     except asyncio.TimeoutError:
                         # Periodic keepalive - send current state even if no new data
                         measurement_data = state.telemetry_state.to_csc_measurement()
-                        csc_measurement_char.notify(
-                            connection, measurement_data)
-                        print("Keepalive notification sent")
+                        if connection.is_connected():
+                            csc_measurement_char.notify(
+                                connection, measurement_data)
+                            print("Keepalive notification sent")
 
             except Exception as e:
                 print(f"Connection error: {e}")
