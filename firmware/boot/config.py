@@ -13,7 +13,7 @@ def load_dotenv(filepath: str = "device.env"):
                     key, val = line.split('=', 1)
                     env[key.strip()] = val.strip()
     except OSError:
-        print("No .env file found")
+        print("No device.env file found")
     return env
 
 

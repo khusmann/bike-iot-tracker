@@ -7,20 +7,25 @@ MPREMOTE = .venv/bin/mpremote
 WEBREPL_CLI = $(PYTHON) 3rdparty/tools/webrepl_cli.py -p $(WEBREPL_PASSWORD)
 
 SRC_DIR = src
+BOOT_DIR = boot
 THIRDPARTY_DEVICE_DIR = 3rdparty/device
 
 # Find all Python files in src directory (frequently changing application code)
 SRC_FILES := $(shell find -L $(SRC_DIR) -type f -name '*.py')
 
+# Find all Python files in boot directory (initialization files)
+BOOT_FILES := $(shell find -L $(BOOT_DIR) -type f -name '*.py')
+
 # Find all Python files in 3rdparty/device directory (libraries to push to device)
 THIRDPARTY_FILES := $(shell find -L $(THIRDPARTY_DEVICE_DIR) -type f -name '*.py')
 
-.PHONY: help repl push push-lib push-local repl-local update-3rdparty
+.PHONY: help repl push push-boot push-lib push-local repl-local update-3rdparty
 
 help:
 	@echo "Available commands:"
 	@echo "  make repl            - Connect to WebREPL"
 	@echo "  make push            - Push src files to device via WebREPL"
+	@echo "  make push-boot       - Push boot files to device via WebREPL"
 	@echo "  make push-lib        - Push 3rdparty files and device.env to device via WebREPL"
 	@echo "  make push-local      - Push boot files to device via serial (for initial setup)"
 	@echo "  make repl-local      - Connect to REPL via serial"
@@ -30,6 +35,13 @@ help:
 
 repl:
 	$(WEBREPL_CLI) $(WEBREPL_IP):$(WEBREPL_PORT)
+
+push-boot:
+	@for file in $(BOOT_FILES); do \
+		relative=$$(echo $$file | sed 's|^$(SRC_DIR)/||'); \
+		echo "Pushing $$relative..."; \
+		$(WEBREPL_CLI) $$file $(WEBREPL_IP):$(WEBREPL_PORT):$$relative; \
+	done
 
 push:
 	@for file in $(SRC_FILES); do \
@@ -50,8 +62,11 @@ push-lib:
 # Push enough to get the WebREPL running
 push-local:
 	$(MPREMOTE) connect $(SERIAL_PORT) fs cp .env :device.env
-	$(MPREMOTE) connect $(SERIAL_PORT) fs cp $(SRC_DIR)/boot.py :boot.py
-	$(MPREMOTE) connect $(SERIAL_PORT) fs cp $(SRC_DIR)/config.py :config.py
+	@for file in $(BOOT_FILES); do \
+		relative=$$(echo $$file | sed 's|^$(BOOT_DIR)/||'); \
+		echo "Pushing $$relative..."; \
+		$(MPREMOTE) connect $(SERIAL_PORT) fs cp $$file :$$relative; \
+	done
 
 repl-local:
 	$(MPREMOTE) repl $(SERIAL_PORT)
