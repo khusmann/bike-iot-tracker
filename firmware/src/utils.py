@@ -4,6 +4,7 @@ import ntptime
 from machine import Pin
 from time import localtime
 import typing as t
+import uos
 
 # LED blink patterns (sequence of on/off durations in seconds)
 SIMPLE_BLINK_PATTERN = [0.5, 0.5]  # Simple blink: on 0.5s, off 0.5s
@@ -104,3 +105,48 @@ async def sync_ntp_time(led: t.Optional[Pin] = None) -> None:
         log("Entering NTP error state...")
         while True:
             await blink_led(led, DOUBLE_BLINK_PATTERN)
+
+
+def atomic_write(filename: str, text: str, temp_file_ext: str = '.tmp') -> bool:
+    """
+    Write text to a file using atomic write pattern.
+
+    Atomic write pattern:
+    1. Write to temporary file
+    2. Rename temporary file to target (atomic operation on most filesystems)
+
+    Args:
+        filename: Target file path
+        text: Text content to write
+        temp_file_ext: Extension for temporary file (default: '.tmp')
+
+    Returns:
+        True if write successful, False otherwise
+    """
+
+    temp_file = filename + temp_file_ext
+
+    try:
+        # Write to temporary file
+        with open(temp_file, 'w') as f:
+            f.write(text)
+
+        try:
+            # Atomic rename
+            uos.rename(temp_file, filename)
+        except Exception as e:
+            log(f"Error during atomic rename: {e}")
+            return False
+
+        return True
+
+    except Exception as e:
+        log(f"Error writing file {filename}: {e}")
+        return False
+
+    finally:
+        # Clean up temp file if it still exists
+        try:
+            uos.remove(temp_file)
+        except OSError:
+            pass  # Temp file doesn't exist, that's fine
