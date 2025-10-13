@@ -11,7 +11,7 @@ import json
 
 @dataclass
 class Telemetry:
-    """Mutable state for crank telemetry tracking"""
+    """Crank telemetry tracking"""
     cumulative_revolutions: int = 0
     last_event_time: int = 0
     last_physical_time_ms: int = 0
