@@ -169,7 +169,16 @@ async def serve_connection(
     print(f"Connected to {connection.device}")
 
     try:
-        while True:
+        while connection.is_connected():
+            current_time = localtime()
+            timestamp = f"{current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"
+            measurement_data = state.telemetry_state.to_csc_measurement()
+
+            characteristic.notify(connection, measurement_data)
+            print(
+                f"[{timestamp}] Notification sent: rev={state.telemetry_state.cumulative_revolutions}"
+            )
+
             # Wait for new revolution event or 30s timeout for keepalive
             try:
                 await asyncio.wait_for(
@@ -177,25 +186,8 @@ async def serve_connection(
                     timeout=30.0
                 )
                 state.new_revolution_event.clear()
-                is_keepalive = False
             except asyncio.TimeoutError:
-                is_keepalive = True
-
-            if (connection.is_connected()):
-                # Send current telemetry state
-                measurement_data = state.telemetry_state.to_csc_measurement()
-                characteristic.notify(connection, measurement_data)
-
-                # Log notification with timestamp
-                current_time = localtime()
-                timestamp = f"{current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"
-                if is_keepalive:
-                    print(f"[{timestamp}] Keepalive notification sent")
-                else:
-                    print(f"[{timestamp}] Notification sent: rev={state.telemetry_state.cumulative_revolutions}")
-            else:
-                break
-
+                print(f"Revolution timeout")
     except Exception as e:
         print(f"Connection error: {e}")
     finally:
