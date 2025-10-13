@@ -5,6 +5,7 @@ from time import ticks_ms
 from typing import Callable
 import bluetooth
 import aioble
+import typing as t
 from udataclasses import dataclass, field
 from primitives import Pushbutton
 from utils import ensure_wifi_connected, sync_ntp_time, log
@@ -28,6 +29,9 @@ TIME_UNIT_HZ = 1024
 
 # Interval for sending notifications when idle (no revolutions) in seconds
 IDLE_NOTIFICATION_INTERVAL_S = 30
+
+# Connection loop polling interval in seconds
+CONNECTION_POLL_INTERVAL_S = 1
 
 
 @dataclass
@@ -128,19 +132,12 @@ async def serve_connection(
 
     last_seen_revolution = state.telemetry_state.cumulative_revolutions
     last_notification_ms = ticks_ms()
+    notification_type: t.Literal["INIT", "REVOLUTION", "IDLE", "NONE"] = "INIT"
 
     try:
         while connection.is_connected():
             current_revolution = state.telemetry_state.cumulative_revolutions
             elapsed_s = (ticks_ms() - last_notification_ms) / 1000
-
-            if current_revolution > last_seen_revolution:
-                last_seen_revolution = current_revolution
-                notification_type = "REVOLUTION"
-            elif elapsed_s >= IDLE_NOTIFICATION_INTERVAL_S:
-                notification_type = "IDLE"
-            else:
-                notification_type = "NONE"
 
             if notification_type != "NONE":
                 measurement_data = state.telemetry_state.to_csc_measurement()
@@ -151,7 +148,15 @@ async def serve_connection(
                 last_notification_ms = ticks_ms()
 
             # Sleep briefly for responsiveness to disconnection
-            await asyncio.sleep(1)
+            await asyncio.sleep(CONNECTION_POLL_INTERVAL_S)
+
+            if current_revolution > last_seen_revolution:
+                last_seen_revolution = current_revolution
+                notification_type = "REVOLUTION"
+            elif elapsed_s >= IDLE_NOTIFICATION_INTERVAL_S:
+                notification_type = "IDLE"
+            else:
+                notification_type = "NONE"
 
     except Exception as e:
         log_connection(f"Connection error: {e}")
