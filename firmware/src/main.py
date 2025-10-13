@@ -5,10 +5,9 @@ from time import ticks_ms, localtime
 from typing import Callable
 import bluetooth
 import aioble
-import network
-import ntptime
 from udataclasses import dataclass, field
 from primitives import Pushbutton
+from utils import ensure_wifi_connected, sync_ntp_time
 
 # Hardware configuration
 led = Pin(4, Pin.OUT)
@@ -107,55 +106,6 @@ def make_reed_press_handler(state: AppState) -> Callable[[], None]:
     return on_reed_press
 
 
-async def ensure_wifi_and_sync_ntp() -> None:
-    """
-    Ensure WiFi is connected and sync NTP clock.
-
-    If WiFi is not connected, blink the LED and keep retrying until connected.
-    Once connected, set the time via NTP.
-    """
-    wlan = network.WLAN(network.STA_IF)
-
-    # Wait for WiFi connection
-    retry_count = 0
-    while not wlan.isconnected():
-        retry_count += 1
-        print(f"WiFi not connected. Attempt #{retry_count} to reconnect...")
-
-        # Blink LED while waiting
-        led.value(1)
-        await asyncio.sleep(0.5)
-        led.value(0)
-        await asyncio.sleep(0.5)
-
-    # WiFi is connected
-    print(f"WiFi connected: {wlan.ifconfig()}")
-
-    # Sync NTP clock
-    try:
-        print("Setting time via NTP...")
-        ntptime.settime()
-        # Display current time
-        current_time = localtime()
-        print(
-            f"NTP time synchronized successfully: {current_time[0]}-{current_time[1]:02d}-{current_time[2]:02d} {current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d} UTC"
-        )
-    except Exception as e:
-        print(f"Failed to sync NTP time: {e}")
-        # Enter error state with distinct LED pattern (rapid double-blink)
-        print("Entering NTP error state...")
-        while True:
-            # Double-blink pattern: on-off-on-off-pause
-            led.value(1)
-            await asyncio.sleep(0.1)
-            led.value(0)
-            await asyncio.sleep(0.1)
-            led.value(1)
-            await asyncio.sleep(0.1)
-            led.value(0)
-            await asyncio.sleep(0.7)  # Longer pause between double-blinks
-
-
 async def serve_connection(
     connection: aioble.device.DeviceConnection,
     characteristic: aioble.Characteristic,
@@ -190,7 +140,7 @@ async def serve_connection(
                 )
                 state.new_revolution_event.clear()
             except asyncio.TimeoutError:
-                print(f"Revolution timeout")
+                print(f"Idle timeout")
     except Exception as e:
         print(f"Connection error: {e}")
     finally:
@@ -250,8 +200,11 @@ async def main() -> None:
     print(f"LED on GPIO {led}")
     print(f"Reed switch on GPIO {reed}")
 
-    # Ensure WiFi is connected and sync NTP clock
-    await ensure_wifi_and_sync_ntp()
+    # Ensure WiFi is connected
+    await ensure_wifi_connected(led=led)
+
+    # Sync NTP clock
+    await sync_ntp_time(led=led)
 
     # Start BLE peripheral with state
     await advertise_and_serve(state)

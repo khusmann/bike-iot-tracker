@@ -12,7 +12,7 @@ SRC_DIR = src
 SRC_FILES := $(shell find -L $(SRC_DIR) -type f -name '*.py')
 
 # Main source files to push separately (frequently changing), relative to $(SRC_DIR)
-MAIN_FILES_REL := main.py
+MAIN_FILES_REL := main.py utils.py
 
 # Convert to full paths for filtering
 MAIN_FILES := $(addprefix $(SRC_DIR)/,$(MAIN_FILES_REL))
