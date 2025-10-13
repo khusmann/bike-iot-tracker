@@ -24,7 +24,14 @@ DEVICE_NAME = "BikeTracker"
 
 
 def on_reed_press(state: AppState) -> None:
-    """Handler for reed switch press - updates telemetry on crank rotation"""
+    """Handle reed switch press event.
+
+    Updates telemetry on crank rotation, records revolution in session manager,
+    and provides visual feedback via LED toggle.
+
+    Args:
+        state: Application state containing telemetry and session managers.
+    """
     # Update telemetry state in place
     state.telemetry_manager.record_revolution()
 
@@ -38,14 +45,13 @@ def on_reed_press(state: AppState) -> None:
 
 
 async def advertise_and_serve(state: AppState) -> None:
-    """
-    Main BLE advertising loop that spawns independent connection tasks.
+    """Main BLE advertising loop that spawns independent connection tasks.
 
     Like a web server, continues advertising after accepting connections,
     enabling multiple concurrent devices (up to 3-4 on ESP32).
 
     Args:
-        state: Application state object containing telemetry data
+        state: Application state object containing telemetry data.
     """
     # Register CSC Service
     csc_service = aioble.Service(CSC_SERVICE_UUID)
@@ -85,8 +91,11 @@ async def advertise_and_serve(state: AppState) -> None:
 
 
 async def main() -> None:
-    """Main entry point - ensure WiFi/NTP then start BLE peripheral"""
+    """Main entry point.
 
+    Initializes application state, ensures WiFi/NTP connectivity, starts
+    background tasks, and runs BLE peripheral.
+    """
     # Create application state (session manager initialized via default_factory)
     state = AppState()
 

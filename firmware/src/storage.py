@@ -13,16 +13,16 @@ from utils import log, atomic_write
 
 
 def read_session_store(filename: str) -> SessionStore:
-    """
-    Load sessions from filesystem.
+    """Load sessions from filesystem.
+
+    Handles missing files, corrupted JSON, and I/O errors gracefully by
+    returning an empty store.
+
+    Args:
+        filename: Path to the session store JSON file.
 
     Returns:
-        SessionStore with loaded data, or empty store if file doesn't exist
-
-    Handles:
-        - Missing file (returns empty store)
-        - Corrupted JSON (logs error, returns empty store)
-        - Other I/O errors (logs error, returns empty store)
+        SessionStore with loaded data, or empty store on error.
     """
     try:
         # Check if file exists
@@ -56,15 +56,14 @@ def read_session_store(filename: str) -> SessionStore:
 
 
 def write_session_store(store: SessionStore, filename: str) -> bool:
-    """
-    Save sessions to filesystem using atomic write.
+    """Save sessions to filesystem using atomic write.
 
     Args:
-        store: SessionStore to save
-        filename: Target file path
+        store: SessionStore to save.
+        filename: Target file path.
 
     Returns:
-        True if save successful, False otherwise
+        True if save successful, False otherwise.
     """
     try:
         # Serialize to JSON

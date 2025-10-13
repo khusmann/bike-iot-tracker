@@ -34,15 +34,14 @@ async def session_idle_timeout(
     session_manager: SessionManager,
     state: AppState
 ) -> None:
-    """
-    Monitor for idle periods and automatically end sessions.
+    """Monitor for idle periods and automatically end sessions.
 
     Checks the last_physical_time_ms from telemetry state. If more than
     IDLE_TIMEOUT_MS has elapsed without a crank event, ends the current session.
 
     Args:
-        session_manager: SessionManager instance to end sessions
-        state: Application state containing telemetry
+        session_manager: SessionManager instance to end sessions.
+        state: Application state containing telemetry.
     """
     log("Idle timeout task started")
 
@@ -74,14 +73,13 @@ async def session_idle_timeout(
 async def session_periodic_save(
     session_manager: SessionManager
 ) -> None:
-    """
-    Periodically save the active session.
+    """Periodically save the active session.
 
     Saves the current session every SAVE_INTERVAL_S seconds without ending it.
     This ensures that session data is preserved even if the device loses power.
 
     Args:
-        session_manager: SessionManager instance to save sessions
+        session_manager: SessionManager instance to save sessions.
     """
     log("Periodic save task started")
 
@@ -98,16 +96,15 @@ async def ble_serve_connection(
     characteristic: aioble.Characteristic,
     state: AppState
 ) -> None:
-    """
-    Handle a single BLE connection by sending telemetry notifications.
+    """Handle a single BLE connection by sending telemetry notifications.
 
     Runs as an independent task per connection, enabling concurrent
     multi-device support.
 
     Args:
-        connection: Active BLE connection to serve
-        characteristic: CSC measurement characteristic to notify on
-        state: Application state containing telemetry data
+        connection: Active BLE connection to serve.
+        characteristic: CSC measurement characteristic to notify on.
+        state: Application state containing telemetry data.
     """
     def log_connection(s: str):
         log(f"[{connection.device.addr_hex()}] {s}")

@@ -16,6 +16,12 @@ from utils import log
 
 @dataclass
 class TelemetryManager:
+    """Manages telemetry state for BLE CSC notifications.
+
+    Attributes:
+        TIME_UNIT_HZ: CSC time unit frequency (1024 Hz per BLE spec).
+        current_telemetry: Current telemetry state.
+    """
     # CSC timing constants
     # Time is measured in 1/1024 second units per BLE CSC spec
     TIME_UNIT_HZ: t.ClassVar[int] = 1024
@@ -23,7 +29,7 @@ class TelemetryManager:
     current_telemetry: Telemetry = field(default_factory=Telemetry)
 
     def record_revolution(self) -> None:
-        """Record a new revolution by updating state in place"""
+        """Record a new revolution by updating state in place."""
         current_time_ms = time.ticks_ms()
 
         # Convert milliseconds to 1/1024 second units
@@ -42,10 +48,14 @@ class TelemetryManager:
 
 @dataclass
 class SessionManager:
-    """
-    Manages cycling session lifecycle and persistence.
+    """Manages cycling session lifecycle and persistence.
 
     Tracks the currently active session (if any) and maintains the session store.
+
+    Attributes:
+        SESSIONS_FILE: Path to sessions JSON file.
+        store: Persistent session store.
+        current_session: Currently active session, if any.
     """
     SESSIONS_FILE: t.ClassVar[str] = "/sessions.json"
 
@@ -56,14 +66,13 @@ class SessionManager:
     current_session: t.Optional[Session] = None
 
     def start_session(self) -> Session:
-        """
-        Start a new cycling session.
+        """Start a new cycling session.
 
         Creates a new session with the current timestamp and increments
         the session ID counter.
 
         Returns:
-            The newly created Session
+            The newly created Session.
         """
         if self.current_session is not None:
             log("Warning: Starting new session while another is active")
@@ -85,14 +94,13 @@ class SessionManager:
         return self.current_session
 
     def end_session(self) -> t.Optional[Session]:
-        """
-        End the current active session and save it to storage.
+        """End the current active session and save it to storage.
 
         Updates the end_time to now, adds the session to the store,
         and persists to disk.
 
         Returns:
-            The ended Session, or None if no active session
+            The ended Session, or None if no active session.
         """
         if self.current_session is None:
             log("No active session to end")
@@ -117,8 +125,7 @@ class SessionManager:
         return ended_session
 
     def record_revolution(self) -> None:
-        """
-        Record a crank revolution in the current session.
+        """Record a crank revolution in the current session.
 
         If no session is active, starts a new one.
         Increments the revolution counter and updates the end_time.
@@ -135,14 +142,13 @@ class SessionManager:
             )
 
     def save_current_session(self) -> bool:
-        """
-        Save the current active session without ending it.
+        """Save the current active session without ending it.
 
         This is for periodic persistence of active sessions to prevent
         data loss on unexpected shutdown.
 
         Returns:
-            True if save successful, False otherwise
+            True if save successful, False otherwise.
         """
         if self.current_session is None:
             return True  # Nothing to save
@@ -165,25 +171,23 @@ class SessionManager:
         return success
 
     def get_unsynced_sessions(self) -> list[Session]:
-        """
-        Get all sessions that haven't been synced yet.
+        """Get all sessions that haven't been synced yet.
 
         Returns:
-            List of unsynced sessions (synced=False)
+            List of unsynced sessions (synced=False).
         """
         unsynced = [s for s in self.store.sessions if not s.synced]
         log(f"Found {len(unsynced)} unsynced sessions")
         return unsynced
 
     def mark_session_synced(self, session_id: int) -> bool:
-        """
-        Mark a session as synced.
+        """Mark a session as synced.
 
         Args:
-            session_id: ID of the session to mark as synced
+            session_id: ID of the session to mark as synced.
 
         Returns:
-            True if session found and marked, False otherwise
+            True if session found and marked, False otherwise.
         """
         for session in self.store.sessions:
             if session.id == session_id:
@@ -196,20 +200,31 @@ class SessionManager:
         return False
 
     def has_active_session(self) -> bool:
-        """Check if there is currently an active session."""
+        """Check if there is currently an active session.
+
+        Returns:
+            True if a session is active, False otherwise.
+        """
         return self.current_session is not None
 
     def get_current_session(self) -> t.Optional[Session]:
-        """Get the current active session, if any."""
+        """Get the current active session, if any.
+
+        Returns:
+            Current session or None.
+        """
         return self.current_session
 
 
 @dataclass
 class AppState:
-    """
-    Mutable application state container.
+    """Mutable application state container.
 
     Encapsulates all mutable state in one place to avoid module-level globals.
+
+    Attributes:
+        telemetry_manager: Manages BLE telemetry state.
+        session_manager: Manages session lifecycle and persistence.
     """
     telemetry_manager: TelemetryManager = field(
         default_factory=TelemetryManager
