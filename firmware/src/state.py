@@ -17,11 +17,7 @@ class TelemetryManager:
     TIME_UNIT_HZ = 1024
 
     def __init__(self) -> None:
-        self._current_telemetry: Telemetry = Telemetry()
-
-    @property
-    def current_telemetry(self):
-        return self._current_telemetry
+        self.current_telemetry: Telemetry = Telemetry()
 
     def record_revolution(self) -> None:
         """Record a new revolution by updating state in place"""
@@ -33,14 +29,12 @@ class TelemetryManager:
         wrapped_time = time_in_units & 0xFFFF
         # Wrap at 32 bits per spec
         wrapped_revolutions = (
-            self._current_telemetry.cumulative_revolutions + 1
+            self.current_telemetry.cumulative_revolutions + 1
         ) & 0xFFFFFFFF  # Wrap at 32 bits
 
-        self._current_telemetry = Telemetry(
-            cumulative_revolutions=wrapped_revolutions,
-            last_event_time=wrapped_time,
-            last_physical_time_ms=current_time_ms
-        )
+        self.current_telemetry.cumulative_revolutions = wrapped_revolutions
+        self.current_telemetry.last_event_time = wrapped_time
+        self.current_telemetry.last_physical_time_ms = current_time_ms
 
 
 class SessionManager:
@@ -52,19 +46,11 @@ class SessionManager:
 
     def __init__(self) -> None:
         """Initialize the session manager by loading persisted sessions."""
-        self._store: SessionStore = load_sessions()
-        self._current_session: t.Optional[Session] = None
+        self.store: SessionStore = load_sessions()
+        self.current_session: t.Optional[Session] = None
         log(
             f"SessionManager initialized with {len(self.store.sessions)} stored sessions"
         )
-
-    @property
-    def store(self):
-        return self._store
-
-    @property
-    def current_session(self):
-        return self._current_session
 
     def start_session(self) -> Session:
         """
@@ -82,7 +68,7 @@ class SessionManager:
         current_time = int(time.time())
         session_id = self.store.next_id
 
-        self._current_session = Session(
+        self.current_session = Session(
             id=session_id,
             start_time=current_time,
             end_time=current_time,
@@ -93,7 +79,7 @@ class SessionManager:
         self.store.next_id += 1
 
         log(f"Started session {session_id} at {current_time}")
-        return self._current_session
+        return self.current_session
 
     def end_session(self) -> t.Optional[Session]:
         """
@@ -123,7 +109,7 @@ class SessionManager:
             f"duration={(self.current_session.end_time - self.current_session.start_time)}s")
 
         ended_session = self.current_session
-        self._current_session = None
+        self.current_session = None
 
         return ended_session
 

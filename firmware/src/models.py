@@ -9,7 +9,7 @@ from udataclasses import dataclass, field
 import json
 
 
-@dataclass(frozen=True)
+@dataclass
 class Telemetry:
     """Mutable state for crank telemetry tracking"""
     cumulative_revolutions: int = 0
