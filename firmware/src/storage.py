@@ -9,12 +9,7 @@ from models import SessionStore
 from utils import log
 
 
-# Storage file location
-SESSIONS_FILE = "/sessions.json"
-SESSIONS_TEMP_FILE = "/sessions.json.tmp"
-
-
-def read_session_store() -> SessionStore:
+def read_session_store(filename: str) -> SessionStore:
     """
     Load sessions from filesystem.
 
@@ -29,14 +24,14 @@ def read_session_store() -> SessionStore:
     try:
         # Check if file exists
         try:
-            os.stat(SESSIONS_FILE)
+            os.stat(filename)
         except OSError:
             # File doesn't exist - return empty store
             log("No sessions file found, initializing empty store")
             return SessionStore()
 
         # Read file contents
-        with open(SESSIONS_FILE, 'r') as f:
+        with open(filename, 'r') as f:
             json_str = f.read()
 
         # Parse JSON
@@ -57,7 +52,7 @@ def read_session_store() -> SessionStore:
         return SessionStore()
 
 
-def write_session_store(store: SessionStore) -> bool:
+def write_session_store(store: SessionStore, filename: str) -> bool:
     """
     Save sessions to filesystem using atomic write.
 
@@ -71,24 +66,26 @@ def write_session_store(store: SessionStore) -> bool:
     Returns:
         True if save successful, False otherwise
     """
+    temp_filename = filename + ".tmp"
+
     try:
         # Serialize to JSON
         json_str = store.to_json()
 
         # Write to temporary file
-        with open(SESSIONS_TEMP_FILE, 'w') as f:
+        with open(temp_filename, 'w') as f:
             f.write(json_str)
 
         # Atomic rename
         try:
             # Remove target file if it exists (required on some filesystems)
             try:
-                os.remove(SESSIONS_FILE)
+                os.remove(filename)
             except OSError:
                 pass  # File doesn't exist, that's fine
 
             # Rename temp file to target
-            os.rename(SESSIONS_TEMP_FILE, SESSIONS_FILE)
+            os.rename(temp_filename, filename)
 
         except Exception as e:
             log(f"Error during atomic rename: {e}")
@@ -104,6 +101,6 @@ def write_session_store(store: SessionStore) -> bool:
     finally:
         # Clean up temp file if it still exists
         try:
-            os.remove(SESSIONS_TEMP_FILE)
+            os.remove(temp_filename)
         except OSError:
             pass  # Temp file doesn't exist, that's fine

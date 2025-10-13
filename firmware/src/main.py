@@ -88,6 +88,10 @@ async def main() -> None:
     # Create application state (session manager initialized via default_factory)
     state = AppState()
 
+    log(
+        f"Initialized with {len(state.session_manager.store.sessions)} stored sessions"
+    )
+
     # Set up reed switch using Pushbutton primitive
     # sense=1 because reed switch is active-low (PULL_UP, closed = 0)
     reed_button = Pushbutton(reed, sense=1)
