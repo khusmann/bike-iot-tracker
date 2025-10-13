@@ -1,6 +1,7 @@
 package com.biketracker
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +15,10 @@ import kotlinx.coroutines.launch
  * Follows functional patterns with immutable state updates
  */
 class BikeViewModel(application: Application) : AndroidViewModel(application) {
+
+    companion object {
+        private const val TAG = "BikeViewModel"
+    }
 
     private val bleManager = BleManager(application)
 
@@ -31,8 +36,8 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
 
             bleManager.connect().collect { result ->
                 result.fold(
-                    onSuccess = { measurement ->
-                        updateState(measurement)
+                    onSuccess = { event ->
+                        handleBleEvent(event)
                     },
                     onFailure = { error ->
                         _state.value = _state.value.copy(
@@ -47,15 +52,36 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Handles BLE events (connection, measurements, errors)
+     */
+    private fun handleBleEvent(event: BleEvent) {
+        when (event) {
+            is BleEvent.ConnectionEstablished -> {
+                _state.value = _state.value.copy(
+                    connectionState = ConnectionState.Connected(event.deviceName)
+                )
+            }
+            is BleEvent.MeasurementReceived -> {
+                updateMeasurement(event.measurement)
+            }
+            is BleEvent.ConnectionError -> {
+                _state.value = _state.value.copy(
+                    connectionState = ConnectionState.Error(event.message)
+                )
+            }
+        }
+    }
+
+    /**
      * Updates state with new CSC measurement
      */
-    private fun updateState(measurement: CscMeasurement) {
+    private fun updateMeasurement(measurement: CscMeasurement) {
         val cadence = calculateCadence(previousMeasurement, measurement)
+        Log.d(TAG, "Updating measurement: revolutions=${measurement.cumulativeRevolutions}, cadence=$cadence")
 
-        _state.value = BikeState(
+        _state.value = _state.value.copy(
             cadence = cadence,
-            totalRevolutions = measurement.cumulativeRevolutions,
-            connectionState = ConnectionState.Connected("BikeTracker")
+            totalRevolutions = measurement.cumulativeRevolutions
         )
 
         previousMeasurement = measurement

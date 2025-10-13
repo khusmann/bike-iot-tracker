@@ -122,6 +122,9 @@ async def serve_connection(
     print(f"Connected to {connection.device}")
 
     try:
+        # Give client time to enable notifications (descriptor write)
+        await asyncio.sleep(1.5)
+
         while connection.is_connected():
             current_time = localtime()
             timestamp = f"{current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"

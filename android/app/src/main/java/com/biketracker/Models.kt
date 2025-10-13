@@ -27,6 +27,15 @@ sealed class ConnectionState {
 }
 
 /**
+ * BLE events emitted during connection lifecycle
+ */
+sealed class BleEvent {
+    data class ConnectionEstablished(val deviceName: String) : BleEvent()
+    data class MeasurementReceived(val measurement: CscMeasurement) : BleEvent()
+    data class ConnectionError(val message: String) : BleEvent()
+}
+
+/**
  * Bike telemetry state
  *
  * @property cadence Current cadence in RPM (null if no recent data)

@@ -48,12 +48,12 @@ class BleManager(private val context: Context) {
     private var bluetoothGatt: BluetoothGatt? = null
 
     /**
-     * Scans for and connects to the bike tracker device, emitting CSC measurements
+     * Scans for and connects to the bike tracker device, emitting BLE events
      *
-     * @return Flow of CSC measurements
+     * @return Flow of BLE events (connection established, measurements, errors)
      */
     @SuppressLint("MissingPermission")
-    fun connect(): Flow<Result<CscMeasurement>> = callbackFlow {
+    fun connect(): Flow<Result<BleEvent>> = callbackFlow {
         val adapter = bluetoothAdapter
         if (adapter == null || !adapter.isEnabled) {
             trySend(Result.failure(Exception("Bluetooth not available or disabled")))
@@ -79,11 +79,12 @@ class BleManager(private val context: Context) {
                         when (newState) {
                             BluetoothProfile.STATE_CONNECTED -> {
                                 Log.d(TAG, "Connected to GATT server")
+                                trySend(Result.success(BleEvent.ConnectionEstablished(result.device.name ?: "BikeTracker")))
                                 gatt.discoverServices()
                             }
                             BluetoothProfile.STATE_DISCONNECTED -> {
                                 Log.d(TAG, "Disconnected from GATT server")
-                                trySend(Result.failure(Exception("Disconnected")))
+                                trySend(Result.success(BleEvent.ConnectionError("Disconnected")))
                                 close()
                             }
                         }
@@ -104,11 +105,26 @@ class BleManager(private val context: Context) {
                                     it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                                     gatt.writeDescriptor(it)
                                 }
-                                Log.d(TAG, "Enabled CSC notifications")
+                                Log.d(TAG, "Requesting CSC notifications")
                             } else {
-                                trySend(Result.failure(Exception("CSC characteristic not found")))
+                                trySend(Result.success(BleEvent.ConnectionError("CSC characteristic not found")))
                                 close()
                             }
+                        }
+                    }
+
+                    override fun onDescriptorWrite(
+                        gatt: BluetoothGatt,
+                        descriptor: BluetoothGattDescriptor,
+                        status: Int
+                    ) {
+                        if (status == BluetoothGatt.GATT_SUCCESS) {
+                            if (descriptor.uuid == CLIENT_CHARACTERISTIC_CONFIG_UUID) {
+                                Log.d(TAG, "CSC notifications enabled successfully")
+                            }
+                        } else {
+                            Log.e(TAG, "Failed to enable notifications: $status")
+                            trySend(Result.success(BleEvent.ConnectionError("Failed to enable notifications")))
                         }
                     }
 
@@ -118,8 +134,10 @@ class BleManager(private val context: Context) {
                         value: ByteArray
                     ) {
                         if (characteristic.uuid == CSC_MEASUREMENT_UUID) {
+                            Log.d(TAG, "CSC measurement received: ${value.size} bytes")
                             parseCscMeasurement(value)?.let { measurement ->
-                                trySend(Result.success(measurement))
+                                Log.d(TAG, "Parsed: revolutions=${measurement.cumulativeRevolutions}, time=${measurement.lastEventTime}")
+                                trySend(Result.success(BleEvent.MeasurementReceived(measurement)))
                             }
                         }
                     }
@@ -130,7 +148,7 @@ class BleManager(private val context: Context) {
 
             override fun onScanFailed(errorCode: Int) {
                 Log.e(TAG, "Scan failed with error: $errorCode")
-                trySend(Result.failure(Exception("Scan failed: $errorCode")))
+                trySend(Result.success(BleEvent.ConnectionError("Scan failed: $errorCode")))
                 close()
             }
         }
@@ -141,7 +159,7 @@ class BleManager(private val context: Context) {
             .build()
 
         val scanSettings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_POWER)
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
 
         Log.d(TAG, "Starting BLE scan")
