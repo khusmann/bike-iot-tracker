@@ -1,13 +1,13 @@
 import asyncio
 import struct
 from machine import Pin
-from time import ticks_ms, localtime
+from time import ticks_ms
 from typing import Callable
 import bluetooth
 import aioble
 from udataclasses import dataclass, field
 from primitives import Pushbutton
-from utils import ensure_wifi_connected, sync_ntp_time
+from utils import ensure_wifi_connected, sync_ntp_time, log
 
 # Hardware configuration
 led = Pin(4, Pin.OUT)
@@ -97,7 +97,7 @@ def make_reed_press_handler(state: AppState) -> Callable[[], None]:
         # Toggle LED for visual feedback
         led.value(not led.value())
 
-        print(f"Revolution {state.telemetry_state.cumulative_revolutions}")
+        log(f"Revolution {state.telemetry_state.cumulative_revolutions}")
 
     return on_reed_press
 
@@ -118,7 +118,10 @@ async def serve_connection(
         characteristic: CSC measurement characteristic to notify on
         state: Application state containing telemetry data
     """
-    print(f"Connected to {connection.device}")
+    def log_connection(s: str):
+        log(f"[{connection.device}] {s}")
+
+    log_connection("Connected")
 
     # Give client time to enable notifications (descriptor write)
     await asyncio.sleep(1.5)
@@ -133,32 +136,26 @@ async def serve_connection(
             if current_revolution > last_seen_revolution:
                 # New revolution detected - send notification immediately
                 last_seen_revolution = current_revolution
-                current_time = localtime()
-                timestamp = f"{current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"
                 measurement_data = state.telemetry_state.to_csc_measurement()
                 characteristic.notify(connection, measurement_data)
-                print(
-                    f"[{timestamp}] [{connection.device}] Notification: rev={current_revolution}")
+                log_connection(f"Notification: rev={current_revolution}")
                 last_notification_ms = ticks_ms()
             else:
                 # No new revolution - check if we need idle notification
                 elapsed_s = (ticks_ms() - last_notification_ms) / 1000
                 if elapsed_s >= IDLE_NOTIFICATION_INTERVAL_S:
-                    current_time = localtime()
-                    timestamp = f"{current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"
                     measurement_data = state.telemetry_state.to_csc_measurement()
                     characteristic.notify(connection, measurement_data)
-                    print(
-                        f"[{timestamp}] [{connection.device}] Idle notification")
+                    log_connection(f"Idle notification")
                     last_notification_ms = ticks_ms()
 
             # Sleep briefly for responsiveness to disconnection
             await asyncio.sleep(1)
 
     except Exception as e:
-        print(f"Connection error: {e}")
+        log_connection(f"Connection error: {e}")
     finally:
-        print(f"Disconnected from {connection.device}")
+        log_connection(f"Disconnected")
 
 
 async def advertise_and_serve(state: AppState) -> None:
@@ -187,10 +184,10 @@ async def advertise_and_serve(state: AppState) -> None:
     # Register the service
     aioble.register_services(csc_service)
 
-    print("BLE services registered")
+    log("BLE services registered")
 
     while True:
-        print(f"Advertising as '{DEVICE_NAME}'...")
+        log(f"Advertising as '{DEVICE_NAME}'...")
 
         connection = await aioble.advertise(
             interval_us=250_000,  # 250ms advertising interval
@@ -204,7 +201,7 @@ async def advertise_and_serve(state: AppState) -> None:
         asyncio.create_task(serve_connection(
             connection, csc_measurement_char, state))
 
-        print(f"Connection spawned, returning to advertising...")
+        log(f"Connection spawned, returning to advertising...")
 
 
 async def main() -> None:
@@ -218,9 +215,9 @@ async def main() -> None:
     reed_button = Pushbutton(reed, sense=1)
     reed_button.press_func(make_reed_press_handler(state))
 
-    print("Starting BikeTracker firmware...")
-    print(f"LED on GPIO {led}")
-    print(f"Reed switch on GPIO {reed}")
+    log("Starting BikeTracker firmware...")
+    log(f"LED on GPIO {led}")
+    log(f"Reed switch on GPIO {reed}")
 
     # Ensure WiFi is connected
     await ensure_wifi_connected(led=led)
@@ -236,4 +233,4 @@ async def main() -> None:
 try:
     asyncio.run(main())
 except KeyboardInterrupt:
-    print("Shutting down...")
+    log("Shutting down...")
