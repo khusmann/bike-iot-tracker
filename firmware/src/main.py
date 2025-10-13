@@ -27,6 +27,9 @@ DEVICE_NAME = "BikeTracker"
 # Time is measured in 1/1024 second units per BLE CSC spec
 TIME_UNIT_HZ = 1024
 
+# Interval for sending notifications when idle (no revolutions) in seconds
+IDLE_NOTIFICATION_INTERVAL_S = 30
+
 
 @dataclass
 class TelemetryState:
@@ -179,11 +182,11 @@ async def serve_connection(
                 f"[{timestamp}] Notification sent: rev={state.telemetry_state.cumulative_revolutions}"
             )
 
-            # Wait for new revolution event or 30s timeout for keepalive
+            # Wait for new revolution event or timeout for idle notification
             try:
                 await asyncio.wait_for(
                     state.new_revolution_event.wait(),
-                    timeout=30.0
+                    timeout=IDLE_NOTIFICATION_INTERVAL_S
                 )
                 state.new_revolution_event.clear()
             except asyncio.TimeoutError:
