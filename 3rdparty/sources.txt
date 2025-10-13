@@ -1,4 +1,0 @@
-# Third-party source files
-# Format: filename url
-webrepl_cli.py https://github.com/micropython/webrepl/raw/1e09d9a1d90fe52aba11d1e659afbc95a50cf088/webrepl_cli.py
-typing.py https://raw.githubusercontent.com/Josverl/micropython-stubs/7972fc8abea23907feae7e34f34a9ecff7a27e3f/mip/typing.py

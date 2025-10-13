@@ -48,14 +48,29 @@ To update a dependency to a newer version:
 
 ## Current Dependencies
 
+### typing.py
+
+MicroPython typing stub for type hints compatibility. Enables IDE support for Python type annotations in MicroPython code.
+
+- **Source Repository**: https://github.com/Josverl/micropython-stubs
+
 ### webrepl_cli.py
 
-CLI tool for WebREPL file operations and REPL access.
+CLI tool for WebREPL file operations and REPL access. Used by the parent Makefile for over-the-air firmware updates.
 
 - **Source Repository**: https://github.com/micropython/webrepl
 
-### typing.py
+### aioble
 
-MicroPython typing stub for type hints compatibility.
+Async Bluetooth Low Energy library for MicroPython. Provides the core BLE functionality for the bike tracker.
 
-- **Source Repository**: https://github.com/Josverl/micropython-stubs
+- **Source Repository**: https://github.com/micropython/micropython-lib
+- **Package**: `micropython/bluetooth/aioble`
+- **Modules**: `__init__.py`, `core.py`, `device.py`, `server.py`, `peripheral.py`
+
+### udataclasses
+
+MicroPython port of Python's dataclasses. Enables immutable data structures with type hints, aligned with the functional programming style.
+
+- **Source Repository**: https://github.com/dhrosa/udataclasses
+- **Modules**: Full package including `__init__.py`, `constants.py`, `decorator.py`, `field.py`, `functions.py`, `source.py`, `transform_spec.py`

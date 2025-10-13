@@ -1,0 +1,201 @@
+import asyncio
+import struct
+from machine import Pin
+from time import ticks_ms
+from typing import Callable
+import bluetooth
+import aioble
+from udataclasses import dataclass, field
+from primitives import Pushbutton
+
+# Hardware configuration
+led = Pin(4, Pin.OUT)
+reed = Pin(5, Pin.IN, Pin.PULL_UP)
+
+# BLE Service and Characteristic UUIDs
+# Cycling Speed and Cadence Service
+CSC_SERVICE_UUID = bluetooth.UUID(0x1816)
+# CSC Measurement Characteristic
+CSC_MEASUREMENT_UUID = bluetooth.UUID(0x2A5B)
+
+# Device name for advertising
+DEVICE_NAME = "BikeTracker"
+
+# CSC timing constants
+# Time is measured in 1/1024 second units per BLE CSC spec
+TIME_UNIT_HZ = 1024
+
+
+@dataclass
+class TelemetryState:
+    """Mutable state for crank telemetry tracking"""
+    cumulative_revolutions: int = 0
+    last_event_time: int = 0
+    last_physical_time_ms: int = 0
+
+    def record_revolution(self, current_time_ms: int) -> None:
+        """Record a new revolution by updating state in place"""
+        # Convert milliseconds to 1/1024 second units
+        time_in_units = (current_time_ms * TIME_UNIT_HZ) // 1000
+        # Wrap at 16 bits (0-65535) per BLE spec
+        wrapped_time = time_in_units & 0xFFFF
+
+        self.cumulative_revolutions = (
+            self.cumulative_revolutions + 1) & 0xFFFFFFFF  # Wrap at 32 bits
+        self.last_event_time = wrapped_time
+        self.last_physical_time_ms = current_time_ms
+
+    def to_csc_measurement(self) -> bytes:
+        """
+        Format state as CSC Measurement per BLE spec
+
+        Format:
+        - Byte 0: Flags (bit 1 = crank revolution data present)
+        - Bytes 1-4: Cumulative crank revolutions (uint32, little-endian)
+        - Bytes 5-6: Last crank event time (uint16, little-endian, 1/1024 sec units)
+        """
+        flags = 0x02  # Bit 1: Crank Revolution Data Present
+        return struct.pack(
+            '<BIH',
+            flags,
+            self.cumulative_revolutions,
+            self.last_event_time
+        )
+
+
+@dataclass
+class AppState:
+    """
+    Mutable application state container.
+
+    Encapsulates all mutable state in one place to avoid module-level globals.
+    """
+    telemetry_state: TelemetryState = field(default_factory=TelemetryState)
+    new_revolution_event: asyncio.Event = field(default_factory=asyncio.Event)
+
+
+def make_reed_press_handler(state: AppState) -> Callable[[], None]:
+    """
+    Create a reed switch press handler with access to state.
+
+    Args:
+        state: Application state object
+
+    Returns:
+        Handler function for reed switch press events
+    """
+    def on_reed_press() -> None:
+        """Handler for reed switch press - updates telemetry on crank rotation"""
+        current_time_ms = ticks_ms()
+
+        # Update telemetry state in place
+        state.telemetry_state.record_revolution(current_time_ms)
+
+        # Toggle LED for visual feedback
+        led.value(not led.value())
+
+        # Signal that new data is available
+        state.new_revolution_event.set()
+
+        print(f"Revolution {state.telemetry_state.cumulative_revolutions}")
+
+    return on_reed_press
+
+
+async def advertise_and_serve(state: AppState) -> None:
+    """
+    Main BLE advertising and connection serving loop.
+
+    Args:
+        state: Application state object containing telemetry and event data
+    """
+    # Register CSC Service
+    csc_service = aioble.Service(CSC_SERVICE_UUID)
+
+    # Register CSC Measurement Characteristic (notify only)
+    csc_measurement_char = aioble.Characteristic(
+        csc_service,
+        CSC_MEASUREMENT_UUID,
+        read=False,
+        write=False,
+        notify=True,
+        indicate=False
+    )
+
+    # Register the service
+    aioble.register_services(csc_service)
+
+    print("BLE services registered")
+
+    while True:
+        print(f"Advertising as '{DEVICE_NAME}'...")
+
+        async with await aioble.advertise(
+            interval_us=250_000,  # 250ms advertising interval
+            name=DEVICE_NAME,
+            services=[CSC_SERVICE_UUID],
+            appearance=0x0000,  # Generic appearance
+        ) as connection:
+            print(f"Connected to {connection.device}")
+
+            try:
+                # Connection handler loop
+                while connection.is_connected():
+                    # Wait for new revolution event or timeout
+                    try:
+                        await asyncio.wait_for(
+                            state.new_revolution_event.wait(),
+                            timeout=30.0
+                        )
+                        state.new_revolution_event.clear()
+
+                        # Send notification with latest telemetry
+                        measurement_data = state.telemetry_state.to_csc_measurement()
+
+                        # Need to check connection right before notify,
+                        # because the connection state could have changed since
+                        # the last event
+                        if connection.is_connected():
+                            csc_measurement_char.notify(
+                                connection, measurement_data)
+                            print(
+                                f"Sent notification: rev={state.telemetry_state.cumulative_revolutions}")
+
+                    except asyncio.TimeoutError:
+                        # Periodic keepalive - send current state even if no new data
+                        measurement_data = state.telemetry_state.to_csc_measurement()
+                        if connection.is_connected():
+                            csc_measurement_char.notify(
+                                connection, measurement_data)
+                            print("Keepalive notification sent")
+
+            except Exception as e:
+                print(f"Connection error: {e}")
+            finally:
+                print("Disconnected")
+
+
+async def main() -> None:
+    """Main entry point - start BLE peripheral"""
+
+    # Create application state
+    state = AppState()
+
+    # Set up reed switch using Pushbutton primitive
+    # sense=1 because reed switch is active-low (PULL_UP, closed = 0)
+    reed_button = Pushbutton(reed, sense=1)
+    reed_button.press_func(make_reed_press_handler(state))
+
+    print("Starting BikeTracker firmware...")
+    print(f"LED on GPIO {led}")
+    print(f"Reed switch on GPIO {reed}")
+
+    # Start BLE peripheral with state
+    await advertise_and_serve(state)
+
+
+# Run the async main loop
+try:
+    asyncio.run(main())
+except KeyboardInterrupt:
+    print("Shutting down...")
