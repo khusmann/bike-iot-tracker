@@ -4,8 +4,34 @@ Session data structures and JSON serialization.
 Defines the core data model for tracking cycling sessions.
 """
 import typing as t
+import struct
 from udataclasses import dataclass, field
 import json
+
+
+@dataclass(frozen=True)
+class Telemetry:
+    """Mutable state for crank telemetry tracking"""
+    cumulative_revolutions: int = 0
+    last_event_time: int = 0
+    last_physical_time_ms: int = 0
+
+    def to_csc_measurement(self) -> bytes:
+        """
+        Format state as CSC Measurement per BLE spec
+
+        Format:
+        - Byte 0: Flags (bit 1 = crank revolution data present)
+        - Bytes 1-4: Cumulative crank revolutions (uint32, little-endian)
+        - Bytes 5-6: Last crank event time (uint16, little-endian, 1/1024 sec units)
+        """
+        flags = 0x02  # Bit 1: Crank Revolution Data Present
+        return struct.pack(
+            '<BIH',
+            flags,
+            self.cumulative_revolutions,
+            self.last_event_time
+        )
 
 
 @dataclass

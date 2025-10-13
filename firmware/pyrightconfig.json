@@ -1,6 +1,10 @@
 {
   "typeCheckingMode": "strict",
   "reportMissingModuleSource": false,
-  "extraPaths": [".venv/lib/python3.10/site-packages", "3rdparty/device", "boot"],
+  "extraPaths": [
+    ".venv/lib/python3.10/site-packages",
+    "3rdparty/device",
+    "boot"
+  ],
   "stubPath": "stubs"
 }

@@ -9,7 +9,7 @@ import asyncio
 from time import ticks_ms, ticks_diff
 import typing as t
 import aioble
-from session_manager import SessionManager
+from state import SessionManager, AppState
 from utils import log
 
 
@@ -28,7 +28,7 @@ CONNECTION_POLL_INTERVAL_S = 1
 
 async def session_idle_timeout(
     session_manager: SessionManager,
-    state: t.Any
+    state: AppState
 ) -> None:
     """
     Monitor for idle periods and automatically end sessions.
@@ -54,7 +54,7 @@ async def session_idle_timeout(
 
         # Check time since last crank event
         current_time_ms = ticks_ms()
-        last_event_ms = state.telemetry_state.last_physical_time_ms
+        last_event_ms = state.telemetry_manager.current_telemetry.last_physical_time_ms
 
         # Handle the case where no events have happened yet
         if last_event_ms == 0:
@@ -92,7 +92,7 @@ async def session_periodic_save(
 async def ble_serve_connection(
     connection: aioble.device.DeviceConnection,
     characteristic: aioble.Characteristic,
-    state: t.Any
+    state: AppState
 ) -> None:
     """
     Handle a single BLE connection by sending telemetry notifications.
@@ -113,17 +113,19 @@ async def ble_serve_connection(
     # Give client time to enable notifications (descriptor write)
     await asyncio.sleep(1.5)
 
-    last_seen_revolution = state.telemetry_state.cumulative_revolutions
+    tm = state.telemetry_manager
+
+    last_seen_revolution = tm.current_telemetry.cumulative_revolutions
     last_notification_ms = ticks_ms()
     notification_type: t.Literal["INIT", "REVOLUTION", "IDLE", "NONE"] = "INIT"
 
     try:
         while connection.is_connected():
-            current_revolution = state.telemetry_state.cumulative_revolutions
+            current_revolution = tm.current_telemetry.cumulative_revolutions
             elapsed_s = (ticks_ms() - last_notification_ms) / 1000
 
             if notification_type != "NONE":
-                measurement_data = state.telemetry_state.to_csc_measurement()
+                measurement_data = tm.current_telemetry.to_csc_measurement()
                 characteristic.notify(connection, measurement_data)
                 log_connection(
                     f"Notification {notification_type}: rev={current_revolution}"

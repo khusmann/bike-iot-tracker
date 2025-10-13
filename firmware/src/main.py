@@ -1,14 +1,11 @@
 import asyncio
-import struct
-from machine import Pin
-from time import ticks_ms
 import bluetooth
 import aioble
-from udataclasses import dataclass, field
 from primitives import Pushbutton
-from utils import ensure_wifi_connected, sync_ntp_time, log
-from session_manager import SessionManager
+from machine import Pin
+from state import AppState
 import tasks
+from utils import ensure_wifi_connected, sync_ntp_time, log
 
 # Hardware configuration
 led = Pin(4, Pin.OUT)
@@ -23,65 +20,11 @@ CSC_MEASUREMENT_UUID = bluetooth.UUID(0x2A5B)
 # Device name for advertising
 DEVICE_NAME = "BikeTracker"
 
-# CSC timing constants
-# Time is measured in 1/1024 second units per BLE CSC spec
-TIME_UNIT_HZ = 1024
-
-
-@dataclass
-class TelemetryState:
-    """Mutable state for crank telemetry tracking"""
-    cumulative_revolutions: int = 0
-    last_event_time: int = 0
-    last_physical_time_ms: int = 0
-
-    def record_revolution(self, current_time_ms: int) -> None:
-        """Record a new revolution by updating state in place"""
-        # Convert milliseconds to 1/1024 second units
-        time_in_units = (current_time_ms * TIME_UNIT_HZ) // 1000
-        # Wrap at 16 bits (0-65535) per BLE spec
-        wrapped_time = time_in_units & 0xFFFF
-
-        self.cumulative_revolutions = (
-            self.cumulative_revolutions + 1) & 0xFFFFFFFF  # Wrap at 32 bits
-        self.last_event_time = wrapped_time
-        self.last_physical_time_ms = current_time_ms
-
-    def to_csc_measurement(self) -> bytes:
-        """
-        Format state as CSC Measurement per BLE spec
-
-        Format:
-        - Byte 0: Flags (bit 1 = crank revolution data present)
-        - Bytes 1-4: Cumulative crank revolutions (uint32, little-endian)
-        - Bytes 5-6: Last crank event time (uint16, little-endian, 1/1024 sec units)
-        """
-        flags = 0x02  # Bit 1: Crank Revolution Data Present
-        return struct.pack(
-            '<BIH',
-            flags,
-            self.cumulative_revolutions,
-            self.last_event_time
-        )
-
-
-@dataclass
-class AppState:
-    """
-    Mutable application state container.
-
-    Encapsulates all mutable state in one place to avoid module-level globals.
-    """
-    telemetry_state: TelemetryState = field(default_factory=TelemetryState)
-    session_manager: SessionManager = field(default_factory=SessionManager)
-
 
 def on_reed_press(state: AppState) -> None:
     """Handler for reed switch press - updates telemetry on crank rotation"""
-    current_time_ms = ticks_ms()
-
     # Update telemetry state in place
-    state.telemetry_state.record_revolution(current_time_ms)
+    state.telemetry_manager.record_revolution()
 
     # Record revolution in session manager
     state.session_manager.record_revolution()
@@ -89,7 +32,7 @@ def on_reed_press(state: AppState) -> None:
     # Toggle LED for visual feedback
     led.value(not led.value())
 
-    log(f"Revolution {state.telemetry_state.cumulative_revolutions}")
+    log(f"Revolution {state.telemetry_manager.current_telemetry.cumulative_revolutions}")
 
 
 async def advertise_and_serve(state: AppState) -> None:

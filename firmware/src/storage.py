@@ -5,7 +5,7 @@ Handles persistent storage of sessions to the ESP32 filesystem with
 atomic write operations for data integrity.
 """
 import os
-from session import SessionStore
+from models import SessionStore
 from utils import log
 
 
