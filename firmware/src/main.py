@@ -8,6 +8,7 @@ from primitives import Pushbutton
 import tasks
 from state import AppState
 from utils import ensure_wifi_connected, sync_ntp_time, log
+from sync_service import register_sync_service, SYNC_SERVICE_UUID
 
 # Hardware configuration
 led = Pin(4, Pin.OUT)
@@ -66,10 +67,13 @@ async def advertise_and_serve(state: AppState) -> None:
         indicate=False
     )
 
-    # Register the service
-    aioble.register_services(csc_service)
+    # Register Sync Service
+    sync_service = register_sync_service(state.session_manager)
 
-    log("BLE services registered")
+    # Register all services
+    aioble.register_services(csc_service, sync_service)
+
+    log("BLE services registered (CSC + Sync)")
 
     while True:
         log(f"Advertising as '{DEVICE_NAME}'...")
@@ -77,7 +81,7 @@ async def advertise_and_serve(state: AppState) -> None:
         connection = await aioble.advertise(
             interval_us=250_000,  # 250ms advertising interval
             name=DEVICE_NAME,
-            services=[CSC_SERVICE_UUID],
+            services=[CSC_SERVICE_UUID, SYNC_SERVICE_UUID],
             appearance=0x0000,  # Generic appearance
         )
 

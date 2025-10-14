@@ -85,23 +85,23 @@ Tasks for **Stage 3: Background Sync Architecture**
 
 #### Tasks
 
-- [ ] F2.1 Create sync service with UUID 0000FF00-0000-1000-8000-00805f9b34fb
-- [ ] F2.2 Register Session Range characteristic (0xFF01, READ)
-- [ ] F2.3 Register Session Data characteristic (0xFF02, WRITE with response)
-- [ ] F2.4 Register Mark Synced characteristic (0xFF03, WRITE with response)
-- [ ] F2.5 Implement Session Range read handler
+- [x] F2.1 Create sync service with UUID 0000FF00-0000-1000-8000-00805f9b34fb
+- [x] F2.2 Register Session Range characteristic (0xFF01, READ)
+- [x] F2.3 Register Session Data characteristic (0xFF02, WRITE with response)
+- [x] F2.4 Register Mark Synced characteristic (0xFF03, WRITE with response)
+- [x] F2.5 Implement Session Range read handler
   - Get unsynced sessions from SessionManager
   - Calculate start (first unsynced session ID) and count
   - Return JSON: `{"start": N, "count": M}`
-- [ ] F2.6 Implement Session Data write handler
+- [x] F2.6 Implement Session Data write handler
   - Parse uint16 session_id from write data (little-endian)
   - Lookup session in SessionManager
   - Return session JSON in write response (or error if not found/synced)
-- [ ] F2.7 Implement Mark Synced write handler
+- [x] F2.7 Implement Mark Synced write handler
   - Parse uint16 session_id from write data (little-endian)
   - Call SessionManager.mark_session_synced(session_id)
   - Return success/ack in write response
-- [ ] F2.8 Extend test_ble_client.py to test sync protocol
+- [x] F2.8 Extend test_ble_client.py to test sync protocol
   - Add Sync Service UUIDs and characteristic UUIDs (0xFF00, 0xFF01, 0xFF02, 0xFF03)
   - Add `SyncClient` class for sync operations
   - Implement `read_session_range()` - reads Session Range characteristic, parses JSON

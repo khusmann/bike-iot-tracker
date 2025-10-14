@@ -5,8 +5,6 @@ All async background tasks are defined here. This centralizes task
 orchestration and makes the concurrent structure of the application
 easy to understand.
 """
-from __future__ import annotations
-
 import asyncio
 import typing as t
 from time import ticks_ms, ticks_diff
@@ -16,9 +14,9 @@ import aioble
 from state import SessionManager, AppState
 from utils import log
 
-
 # Session boundary detection: end session after 10 minutes of inactivity
-IDLE_TIMEOUT_MS = 10 * 60 * 1000  # 10 minutes in milliseconds
+# IDLE_TIMEOUT_MS = 10 * 60 * 1000  # 10 minutes in milliseconds
+IDLE_TIMEOUT_MS = 30 * 1000  # 30 seconds in milliseconds (for debug)
 
 # Periodic persistence: save active session every 5 minutes
 SAVE_INTERVAL_S = 5 * 60  # 5 minutes in seconds
