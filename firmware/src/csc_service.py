@@ -36,11 +36,9 @@ async def notify_csc_subscriptions(
 
         try:
             measurement_data = telemetry_manager.crank_telemetry.to_csc_measurement()
+
             # Notify all subscribed clients (send_update = True)
             characteristic.write(measurement_data, send_update=True)
-            log(
-                f"CSC update: rev={telemetry_manager.crank_telemetry.cumulative_revolutions}"
-            )
         except Exception as e:
             log(f"CSC update error: {e}")
 
