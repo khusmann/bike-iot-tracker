@@ -4,10 +4,6 @@ Filesystem storage for session data.
 Handles persistent storage of sessions to the ESP32 filesystem with
 atomic write operations for data integrity.
 """
-from __future__ import annotations
-
-import os
-
 from models import SessionStore
 from utils import log, atomic_write
 
@@ -25,32 +21,21 @@ def read_session_store(filename: str) -> SessionStore:
         SessionStore with loaded data, or empty store on error.
     """
     try:
-        # Check if file exists
-        try:
-            os.stat(filename)
-        except OSError:
-            # File doesn't exist - return empty store
-            log("No sessions file found, initializing empty store")
-            return SessionStore()
-
         # Read file contents
         with open(filename, 'r') as f:
             json_str = f.read()
+    except OSError as e:
+        log(f"Error opening sessions file: {e}")
+        log("Returning empty store")
+        return SessionStore()
 
+    try:
         # Parse JSON
         store = SessionStore.from_json(json_str)
         log(f"Loaded {len(store.sessions)} sessions from storage")
         return store
-
     except ValueError as e:
-        # JSON parsing error
         log(f"Error parsing sessions file: {e}")
-        log("Returning empty store")
-        return SessionStore()
-
-    except Exception as e:
-        # Other errors
-        log(f"Error loading sessions: {e}")
         log("Returning empty store")
         return SessionStore()
 

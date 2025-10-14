@@ -3,8 +3,6 @@ Session data structures and JSON serialization.
 
 Defines the core data model for tracking cycling sessions.
 """
-from __future__ import annotations
-
 import json
 import struct
 import typing as t
@@ -54,10 +52,10 @@ class Session:
         revolutions: Total crank revolutions in this session.
         synced: Whether this session has been synced to the mobile app.
     """
-    id: int
-    start_time: int
-    end_time: int
-    revolutions: int
+    id: int = 0
+    start_time: int = 0
+    end_time: int = 0
+    revolutions: int = 0
     synced: bool = False
 
     def to_dict(self) -> dict[str, t.Any]:
