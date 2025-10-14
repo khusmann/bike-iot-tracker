@@ -6,10 +6,7 @@ orchestration and makes the concurrent structure of the application
 easy to understand.
 """
 import asyncio
-import typing as t
 from time import ticks_ms, ticks_diff
-
-import aioble
 
 from state import SessionManager, AppState
 from utils import log
@@ -20,12 +17,6 @@ IDLE_TIMEOUT_MS = 30 * 1000  # 30 seconds in milliseconds (for debug)
 
 # Periodic persistence: save active session every 5 minutes
 SAVE_INTERVAL_S = 5 * 60  # 5 minutes in seconds
-
-# Interval for sending notifications when idle (no revolutions) in seconds
-IDLE_NOTIFICATION_INTERVAL_S = 30
-
-# Connection loop polling interval in seconds
-CONNECTION_POLL_INTERVAL_S = 1
 
 
 async def session_idle_timeout(
@@ -87,62 +78,3 @@ async def session_periodic_save(
         if session_manager.has_active_session():
             log("Periodic save triggered")
             session_manager.save_current_session()
-
-
-async def ble_serve_connection(
-    connection: aioble.device.DeviceConnection,
-    characteristic: aioble.Characteristic,
-    state: AppState
-) -> None:
-    """Handle a single BLE connection by sending telemetry notifications.
-
-    Runs as an independent task per connection, enabling concurrent
-    multi-device support.
-
-    Args:
-        connection: Active BLE connection to serve.
-        characteristic: CSC measurement characteristic to notify on.
-        state: Application state containing telemetry data.
-    """
-    def log_connection(s: str):
-        log(f"[{connection.device.addr_hex()}] {s}")
-
-    log_connection("Connected")
-
-    # Give client time to enable notifications (descriptor write)
-    await asyncio.sleep(1.5)
-
-    tm = state.telemetry_manager
-
-    last_seen_revolution = tm.crank_telemetry.cumulative_revolutions
-    last_notification_ms = ticks_ms()
-    notification_type: t.Literal["INIT", "REVOLUTION", "IDLE", "NONE"] = "INIT"
-
-    try:
-        while connection.is_connected():
-            current_revolution = tm.crank_telemetry.cumulative_revolutions
-            elapsed_s = ticks_diff(ticks_ms(), last_notification_ms) / 1000
-
-            if notification_type != "NONE":
-                measurement_data = tm.crank_telemetry.to_csc_measurement()
-                characteristic.notify(connection, measurement_data)
-                log_connection(
-                    f"Notification {notification_type}: rev={current_revolution}"
-                )
-                last_notification_ms = ticks_ms()
-
-            # Sleep briefly for responsiveness to disconnection
-            await asyncio.sleep(CONNECTION_POLL_INTERVAL_S)
-
-            if current_revolution > last_seen_revolution:
-                last_seen_revolution = current_revolution
-                notification_type = "REVOLUTION"
-            elif elapsed_s >= IDLE_NOTIFICATION_INTERVAL_S:
-                notification_type = "IDLE"
-            else:
-                notification_type = "NONE"
-
-    except Exception as e:
-        log_connection(f"Connection error: {e}")
-    finally:
-        log_connection(f"Disconnected")

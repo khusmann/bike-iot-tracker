@@ -1,5 +1,4 @@
 import asyncio
-import bluetooth
 from machine import Pin
 
 import aioble
@@ -8,17 +7,12 @@ from primitives import Pushbutton
 import tasks
 from state import AppState
 from utils import ensure_wifi_connected, sync_ntp_time, log
-from sync_service import register_sync_service, SYNC_SERVICE_UUID
+from sync_service import register_sync_service
+from csc_service import register_csc_service
 
 # Hardware configuration
 led = Pin(4, Pin.OUT)
 reed = Pin(5, Pin.IN, Pin.PULL_UP)
-
-# BLE Service and Characteristic UUIDs
-# Cycling Speed and Cadence Service
-CSC_SERVICE_UUID = bluetooth.UUID(0x1816)
-# CSC Measurement Characteristic
-CSC_MEASUREMENT_UUID = bluetooth.UUID(0x2A5B)
 
 # Device name for advertising
 DEVICE_NAME = "BikeTracker"
@@ -55,17 +49,7 @@ async def advertise_and_serve(state: AppState) -> None:
         state: Application state object containing telemetry data.
     """
     # Register CSC Service
-    csc_service = aioble.Service(CSC_SERVICE_UUID)
-
-    # Register CSC Measurement Characteristic (notify only)
-    csc_measurement_char = aioble.Characteristic(
-        csc_service,
-        CSC_MEASUREMENT_UUID,
-        read=False,
-        write=False,
-        notify=True,
-        indicate=False
-    )
+    csc_service = register_csc_service(state.telemetry_manager)
 
     # Register Sync Service
     sync_service = register_sync_service(state.session_manager)
@@ -81,17 +65,11 @@ async def advertise_and_serve(state: AppState) -> None:
         connection = await aioble.advertise(
             interval_us=250_000,  # 250ms advertising interval
             name=DEVICE_NAME,
-            services=[CSC_SERVICE_UUID, SYNC_SERVICE_UUID],
+            services=[csc_service.uuid, sync_service.uuid],
             appearance=0x0000,  # Generic appearance
         )
 
-        # Spawn connection handler as independent task
-        # This allows immediate return to advertising for multi-device support
-        asyncio.create_task(
-            tasks.ble_serve_connection(connection, csc_measurement_char, state)
-        )
-
-        log(f"Connection spawned, returning to advertising...")
+        log(f"Connection to {connection.device.addr_hex()} spawned, returning to advertising...")
 
 
 async def main() -> None:
