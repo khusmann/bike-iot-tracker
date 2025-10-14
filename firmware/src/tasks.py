@@ -121,7 +121,7 @@ async def ble_serve_connection(
     try:
         while connection.is_connected():
             current_revolution = tm.crank_telemetry.cumulative_revolutions
-            elapsed_s = (ticks_ms() - last_notification_ms) / 1000
+            elapsed_s = ticks_diff(ticks_ms(), last_notification_ms) / 1000
 
             if notification_type != "NONE":
                 measurement_data = tm.crank_telemetry.to_csc_measurement()
