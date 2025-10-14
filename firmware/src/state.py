@@ -11,6 +11,13 @@ from models import Session, SessionStore, CrankTelemetry
 from storage import read_session_store, write_session_store
 from utils import log
 
+# CSC timing constants
+# Time is measured in 1/1024 second units per BLE CSC spec
+CSC_TIME_UNIT_HZ = 1024
+
+# File to save sessions to
+SESSIONS_FILE = "/sessions.json"
+
 
 @dataclass
 class TelemetryManager:
@@ -20,9 +27,6 @@ class TelemetryManager:
         TIME_UNIT_HZ: CSC time unit frequency (1024 Hz per BLE spec).
         current_telemetry: Current telemetry state.
     """
-    # CSC timing constants
-    # Time is measured in 1/1024 second units per BLE CSC spec
-    TIME_UNIT_HZ: t.ClassVar[int] = 1024
 
     crank_telemetry: CrankTelemetry = field(default_factory=CrankTelemetry)
 
@@ -31,7 +35,7 @@ class TelemetryManager:
         current_time_ms = time.ticks_ms()
 
         # Convert milliseconds to 1/1024 second units
-        time_in_units = (current_time_ms * self.TIME_UNIT_HZ) // 1000
+        time_in_units = (current_time_ms * CSC_TIME_UNIT_HZ) // 1000
         # Wrap at 16 bits (0-65535) per BLE spec
         wrapped_time = time_in_units & 0xFFFF
         # Wrap at 32 bits per spec
@@ -55,11 +59,8 @@ class SessionManager:
         store: Persistent session store.
         current_session: Currently active session, if any.
     """
-    SESSIONS_FILE: t.ClassVar[str] = "/sessions.json"
-
     store: SessionStore = field(
-        default_factory=lambda: read_session_store(
-            SessionManager.SESSIONS_FILE)
+        default_factory=lambda: read_session_store(SESSIONS_FILE)
     )
     current_session: t.Optional[Session] = None
 
@@ -111,7 +112,7 @@ class SessionManager:
         self.store.sessions.append(self.current_session)
 
         # Save to disk
-        write_session_store(self.store, self.SESSIONS_FILE)
+        write_session_store(self.store, SESSIONS_FILE)
 
         log(f"Ended session {self.current_session.id}: "
             f"{self.current_session.revolutions} revolutions, "
@@ -157,7 +158,7 @@ class SessionManager:
         # Create a temporary store with just the current session
         # We append it temporarily, save, then remove it
         self.store.sessions.append(self.current_session)
-        success = write_session_store(self.store, self.SESSIONS_FILE)
+        success = write_session_store(self.store, SESSIONS_FILE)
         self.store.sessions.pop()  # Remove it (not truly ended yet)
 
         if success:
@@ -190,7 +191,7 @@ class SessionManager:
         for session in self.store.sessions:
             if session.id == session_id:
                 session.synced = True
-                write_session_store(self.store, self.SESSIONS_FILE)
+                write_session_store(self.store, SESSIONS_FILE)
                 log(f"Marked session {session_id} as synced")
                 return True
 
