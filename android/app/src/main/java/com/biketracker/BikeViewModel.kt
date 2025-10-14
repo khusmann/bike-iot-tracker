@@ -4,6 +4,8 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +20,7 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val TAG = "BikeViewModel"
+        private const val CADENCE_TIMEOUT_MS = 3000L // Reset cadence after 3 seconds of no new revolutions
     }
 
     private val bleManager = BleManager(application)
@@ -26,6 +29,7 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
     val state: StateFlow<BikeState> = _state.asStateFlow()
 
     private var previousMeasurement: CscMeasurement? = null
+    private var cadenceTimeoutJob: Job? = null
 
     /**
      * Starts BLE connection and begins receiving measurements
@@ -76,13 +80,30 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
      * Updates state with new CSC measurement
      */
     private fun updateMeasurement(measurement: CscMeasurement) {
-        val cadence = calculateCadence(previousMeasurement, measurement)
-        Log.d(TAG, "Updating measurement: revolutions=${measurement.cumulativeRevolutions}, cadence=$cadence")
+        val newCadence = calculateCadence(previousMeasurement, measurement)
+        Log.d(TAG, "Updating measurement: revolutions=${measurement.cumulativeRevolutions}, cadence=$newCadence")
 
-        _state.value = _state.value.copy(
-            cadence = cadence,
-            totalRevolutions = measurement.cumulativeRevolutions
-        )
+        // If we have a new valid cadence, update it and reset the timeout
+        if (newCadence != null) {
+            _state.value = _state.value.copy(
+                cadence = newCadence,
+                totalRevolutions = measurement.cumulativeRevolutions
+            )
+
+            // Cancel any existing timeout and start a new one
+            cadenceTimeoutJob?.cancel()
+            cadenceTimeoutJob = viewModelScope.launch {
+                delay(CADENCE_TIMEOUT_MS)
+                // Reset cadence to null after timeout
+                _state.value = _state.value.copy(cadence = null)
+                Log.d(TAG, "Cadence timeout - resetting to null")
+            }
+        } else {
+            // No new revolutions, just update total revolutions
+            _state.value = _state.value.copy(
+                totalRevolutions = measurement.cumulativeRevolutions
+            )
+        }
 
         previousMeasurement = measurement
     }
@@ -92,6 +113,8 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun disconnect() {
         bleManager.disconnect()
+        cadenceTimeoutJob?.cancel()
+        cadenceTimeoutJob = null
         _state.value = BikeState()
         previousMeasurement = null
     }
@@ -99,5 +122,6 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         bleManager.disconnect()
+        cadenceTimeoutJob?.cancel()
     }
 }

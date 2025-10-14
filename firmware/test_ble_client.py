@@ -66,32 +66,12 @@ class CSCClient:
 
     def __init__(self):
         self.client: Optional[BleakClient] = None
-        self.last_measurement: Optional[CSCMeasurement] = None
-        self.last_time: Optional[int] = None
 
     def notification_handler(self, sender, data: bytearray) -> None:
         """Handle incoming CSC notifications"""
         try:
             measurement = CSCMeasurement.from_bytes(bytes(data))
-            print(f"\n[Notification] {measurement}")
-
-            # Calculate cadence if we have a previous measurement
-            if self.last_measurement is not None:
-                rev_delta = measurement.cumulative_revolutions - \
-                    self.last_measurement.cumulative_revolutions
-
-                # Handle 16-bit timer wraparound
-                time_delta = measurement.last_event_time - self.last_time
-                if time_delta < 0:
-                    time_delta += 65536
-
-                if time_delta > 0 and rev_delta > 0:
-                    # Convert to RPM: (revolutions / time_in_1024ths_sec) * (1024 sec/unit) * (60 sec/min)
-                    cadence_rpm = (rev_delta * 1024 * 60) / time_delta
-                    print(f"[Cadence] {cadence_rpm:.1f} RPM")
-
-            self.last_measurement = measurement
-            self.last_time = measurement.last_event_time
+            print(f"[Notification] {measurement}")
 
         except Exception as e:
             print(f"Error parsing notification: {e}")
