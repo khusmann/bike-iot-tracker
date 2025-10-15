@@ -38,10 +38,10 @@ class TelemetryManager:
         time_in_units = (current_time_ms * CSC_TIME_UNIT_HZ) // 1000
         # Wrap at 16 bits (0-65535) per BLE spec
         wrapped_time = time_in_units & 0xFFFF
-        # Wrap at 32 bits per spec
+        # Wrap at 16 bits per CSC spec
         wrapped_revolutions = (
             self.crank_telemetry.cumulative_revolutions + 1
-        ) & 0xFFFFFFFF  # Wrap at 32 bits
+        ) & 0xFFFF  # Wrap at 16 bits
 
         self.crank_telemetry.cumulative_revolutions = wrapped_revolutions
         self.crank_telemetry.last_event_time = wrapped_time

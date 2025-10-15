@@ -15,7 +15,7 @@ class CrankTelemetry:
     """Crank telemetry tracking.
 
     Attributes:
-        cumulative_revolutions: Total crank revolutions (wraps at 32 bits).
+        cumulative_revolutions: Total crank revolutions (wraps at 16 bits per CSC spec).
         last_event_time: Last event time in 1/1024 second units (wraps at 16 bits).
         last_physical_time_ms: Last event physical time in milliseconds.
     """
@@ -27,14 +27,14 @@ class CrankTelemetry:
         """Format telemetry as CSC Measurement per BLE spec.
 
         Returns:
-            7-byte CSC measurement packet:
+            5-byte CSC measurement packet:
                 - Byte 0: Flags (bit 1 = crank revolution data present)
-                - Bytes 1-4: Cumulative crank revolutions (uint32, little-endian)
-                - Bytes 5-6: Last crank event time (uint16, little-endian, 1/1024 sec units)
+                - Bytes 1-2: Cumulative crank revolutions (uint16, little-endian)
+                - Bytes 3-4: Last crank event time (uint16, little-endian, 1/1024 sec units)
         """
         flags = 0x02  # Bit 1: Crank Revolution Data Present
         return struct.pack(
-            '<BIH',
+            '<BHH',
             flags,
             self.cumulative_revolutions,
             self.last_event_time
