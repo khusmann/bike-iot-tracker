@@ -18,10 +18,12 @@ Key features:
 import asyncio
 import json
 import struct
+import typing as t
 
 import aioble
 import bluetooth
 
+from models import Session
 from state import SessionManager
 from utils import log
 
@@ -73,18 +75,117 @@ def register_sync_service(session_manager: SessionManager) -> aioble.Service:
     return sync_service
 
 
+def parse_last_synced_timestamp(request_data: bytes) -> int:
+    """Parse last synced timestamp from request bytes.
+
+    Args:
+        request_data: Raw request bytes (should be 4 bytes uint32 little-endian)
+
+    Returns:
+        Parsed timestamp as integer
+
+    Raises:
+        ValueError: If request_data is invalid (wrong length or format)
+    """
+    if len(request_data) != 4:
+        raise ValueError(
+            f"Invalid request length: {len(request_data)} (expected 4 bytes)"
+        )
+
+    try:
+        last_synced = struct.unpack('<I', request_data)[0]
+    except struct.error as e:
+        raise ValueError(f"Failed to parse request: {e}")
+
+    return last_synced
+
+
+def build_sync_response_dict(sessions: t.List[Session]) -> t.Dict[str, t.Any]:
+    """Build sync response dictionary from sessions list.
+
+    Pure function that formats sessions into the sync protocol response format.
+
+    Args:
+        sessions: List of sessions to include in response (should be sorted by start_time)
+
+    Returns:
+        Response dict with:
+        - If sessions is empty: {"session": None, "remaining_sessions": 0}
+        - Otherwise: {"session": {...}, "remaining_sessions": N}
+          where N is the count of remaining sessions after the first one
+    """
+    n = len(sessions)
+    return {
+        "session": sessions[0] if n > 0 else None,
+        "remaining_sessions": max(n - 1, 0)
+    }
+
+
+def process_session_data_request(
+    request_data: bytes,
+    session_manager: SessionManager
+) -> bytes:
+    """Process a single Session Data request and return the response.
+
+    Orchestrates the sync request handling:
+    1. Parses the request bytes to extract lastSyncedStartTime
+    2. Queries sessions from session_manager
+    3. Builds response dict
+    4. Encodes to JSON bytes
+
+    Protocol:
+    - Input: uint32 lastSyncedStartTime (little-endian, 4 bytes)
+    - Output: JSON bytes with {"session": {...}, "remaining_sessions": N}
+              or {"error": "..."} on error
+
+    Args:
+        request_data: Raw request bytes (should be 4 bytes uint32)
+        session_manager: SessionManager to lookup sessions
+
+    Returns:
+        JSON response as bytes
+    """
+    # Parse request (handles validation)
+    try:
+        last_synced = parse_last_synced_timestamp(request_data)
+    except ValueError as e:
+        error = {"error": str(e)}
+        log(f"Request parse error: {e}")
+        return json.dumps(error).encode('utf-8')
+
+    log(f"Session Data request since {last_synced}")
+
+    # Query sessions
+    sessions = session_manager.get_sessions_since(last_synced)
+
+    # Build response dict
+    response_dict = build_sync_response_dict(sessions)
+
+    # Log what we're returning
+    if response_dict["session"] is None:
+        log("No more sessions to sync")
+    else:
+        remaining = response_dict["remaining_sessions"]
+        session_start = response_dict["session"]["start_time"]
+        log(f"Returning session {session_start}, {remaining} remaining")
+
+    # Encode to JSON bytes
+    json_str = json.dumps(response_dict)
+    response = json_str.encode('utf-8')
+    log(f"Response size: {len(response)} bytes")
+    return response
+
+
 async def handle_session_data_requests(
     characteristic: aioble.Characteristic,
     session_manager: SessionManager
 ) -> None:
     """Background task to handle Session Data write requests.
 
-    Protocol:
-    1. Client writes uint32 lastSyncedStartTime (little-endian)
-    2. Server finds next session where start_time > lastSyncedStartTime
-    3. Server responds with JSON:
-       {"session": {...}, "remaining_sessions": N} or
-       {"session": null, "remaining_sessions": 0} if no more sessions
+    Async loop that:
+    1. Waits for BLE write requests
+    2. Processes each request via process_session_data_request()
+    3. Writes response back to characteristic
 
     MTU Requirements:
     - Response size is ~102 bytes (session JSON + remaining count)
@@ -108,50 +209,13 @@ async def handle_session_data_requests(
 
             log(f"[{connection.device.addr_hex()}] Session Data write")
 
-            # Parse and handle request
-            try:
-                if len(request_data) != 4:
-                    error = {
-                        "error": "Invalid request length (expected 4 bytes)"}
-                    response = json.dumps(error).encode('utf-8')
-                else:
-                    # Parse uint32 lastSyncedStartTime
-                    last_synced = struct.unpack('<I', request_data)[0]
-                    log(f"Session Data request since {last_synced}")
+            # Process request using pure function
+            response = process_session_data_request(
+                request_data, session_manager
+            )
 
-                    # Get sessions after this timestamp
-                    sessions = session_manager.get_sessions_since(last_synced)
-
-                    if len(sessions) == 0:
-                        # No more sessions
-                        response_dict = {
-                            "session": None,
-                            "remaining_sessions": 0
-                        }
-                        log("No more sessions to sync")
-                    else:
-                        # Return first session and count remaining
-                        next_session = sessions[0]
-                        remaining = len(sessions) - 1
-
-                        response_dict = {
-                            "session": next_session.to_dict(),
-                            "remaining_sessions": remaining
-                        }
-                        log(f"Returning session {next_session.start_time}, "
-                            f"{remaining} remaining")
-
-                    json_str = json.dumps(response_dict)
-                    response = json_str.encode('utf-8')
-                    log(f"Response size: {len(response)} bytes")
-
-                # Write response to characteristic (client will read it)
-                characteristic.write(response)
-
-            except Exception as e:
-                error = {"error": f"Request error: {e}"}
-                log(error["error"])
-                characteristic.write(json.dumps(error).encode('utf-8'))
+            # Write response to characteristic (client will read it)
+            characteristic.write(response)
 
         except Exception as e:
             log(f"Session Data handler error: {e}")
