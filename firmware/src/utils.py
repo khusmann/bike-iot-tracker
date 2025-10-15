@@ -7,7 +7,8 @@ from machine import Pin
 from time import localtime
 
 # LED blink patterns (sequence of on/off durations in seconds)
-SIMPLE_BLINK_PATTERN = [0.5, 0.5]  # Simple blink: on 0.5s, off 0.5s
+SLOW_BLINK_PATTERN = [0.5, 0.5]  # Simple blink: on 0.5s, off 0.5s
+FAST_BLINK_PATTERN = [0.1, 0.1]  # Quick blip
 DOUBLE_BLINK_PATTERN = [0.1, 0.1, 0.1, 0.7]  # Double-blink with pause
 
 
@@ -49,7 +50,7 @@ async def blink_led(
     for i, duration in enumerate(pattern):
         # Odd indices (0, 2, 4...) are on-time, even indices (1, 3, 5...) are off-time
         if led is not None:
-            led.value(i % 2)
+            led.value(not i % 2)
         await asyncio.sleep(duration)
 
 
@@ -68,7 +69,7 @@ async def ensure_wifi_connected(led: t.Optional[Pin] = None) -> network.WLAN:
 
     while not wlan.isconnected():
         log(f"Waiting for WiFi to connect...")
-        await blink_led(led, SIMPLE_BLINK_PATTERN)
+        await blink_led(led, SLOW_BLINK_PATTERN)
 
     log(f"WiFi connected: {wlan.ifconfig()}")
     return wlan

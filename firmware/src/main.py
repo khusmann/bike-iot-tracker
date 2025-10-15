@@ -2,11 +2,11 @@ import asyncio
 from machine import Pin
 
 import aioble
-from primitives import Pushbutton
+from primitives.pushbutton import Pushbutton
 
 import tasks
 from state import AppState
-from utils import ensure_wifi_connected, sync_ntp_time, log
+from utils import ensure_wifi_connected, sync_ntp_time, log, blink_led, FAST_BLINK_PATTERN
 from sync_service import register_sync_service
 from csc_service import register_csc_service
 
@@ -18,7 +18,7 @@ reed = Pin(5, Pin.IN, Pin.PULL_UP)
 DEVICE_NAME = "BikeTracker"
 
 
-def on_reed_press(state: AppState) -> None:
+async def on_reed_press(state: AppState) -> None:
     """Handle reed switch press event.
 
     Updates telemetry on crank rotation, records revolution in session manager,
@@ -34,7 +34,7 @@ def on_reed_press(state: AppState) -> None:
     state.session_manager.record_revolution()
 
     # Toggle LED for visual feedback
-    led.value(not led.value())
+    await blink_led(led, FAST_BLINK_PATTERN)
 
     log(f"Revolution {state.telemetry_manager.crank_telemetry.cumulative_revolutions}")
 
