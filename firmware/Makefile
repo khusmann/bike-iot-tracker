@@ -69,7 +69,7 @@ push-boot-local:
 	done
 
 repl-local:
-	$(MPREMOTE) repl $(SERIAL_PORT)
+	$(MPREMOTE) connect $(SERIAL_PORT) repl
 
 # Update all third-party dependencies
 update-3rdparty:
