@@ -281,27 +281,65 @@ Tasks for **Stage 3: Background Sync Architecture**
 
 - [ ] A2.1 Set up Room database dependency
 - [ ] A2.2 Design session entity schema
+  - Use `start_time` (Long, Unix timestamp) as primary key
+  - Fields: `start_time`, `end_time`, `revolutions`
+  - No `synced` flag needed (tracking done via SharedPreferences)
 - [ ] A2.3 Create DAO for session storage
+  - Insert method with REPLACE strategy (handle duplicates gracefully)
+  - Query methods: getAll(), getSessionsSince(startTime), getTotalCount()
 - [ ] A2.4 Implement database initialization
 - [ ] A2.5 Add migration strategy
 
 ### A3. Sync Implementation
 
-- [ ] A3.1 Create BLE sync service/manager
-- [ ] A3.2 Implement session range read from ESP32
-- [ ] A3.3 Implement session data transfer (request + receive)
-- [ ] A3.4 Parse and store sessions in local database
-- [ ] A3.5 Send "mark as synced" confirmation to ESP32
+- [ ] A3.1 **CRITICAL: MTU Negotiation**
+  - Call `gatt.requestMtu(512)` immediately after connection established
+  - Wait for `onMtuChanged()` callback before starting sync
+  - Verify negotiated MTU >= 185 bytes (response ~102 bytes + overhead)
+  - If MTU < 185: log error, disconnect, notify user
+  - Connection flow: connect → negotiate MTU → sync → disconnect
+- [ ] A3.2 Add SharedPreferences for sync state
+  - Key: `LAST_SYNCED_START_TIME` (Long, default 0)
+  - Store after each successful sync to enable resume
+- [ ] A3.3 Create BLE sync service/manager
+  - Connect to Bike Tracker Sync Service (UUID 0x0000FF00-...)
+  - Reference only Session Data characteristic (0xFF02) - other characteristics removed in F3
+- [ ] A3.4 Implement timestamp-based sync loop
+  - Read `lastSyncedStartTime` from SharedPreferences (default 0)
+  - Loop:
+    - Write `lastSyncedStartTime` as uint32 little-endian (4 bytes) to 0xFF02
+    - Read JSON response: `{"session": {...}, "remaining_sessions": N}` or `{"session": null, "remaining_sessions": 0}`
+    - If session is null: break (sync complete)
+    - Store session in local database
+    - Update `lastSyncedStartTime = session.start_time`
+    - Optional: Update UI with progress using `remaining_sessions` count
+  - After loop completes: persist final `lastSyncedStartTime` to SharedPreferences
+- [ ] A3.5 Parse and store sessions in local database
+  - JSON schema: `{"start_time": 1728849600, "end_time": 1728851400, "revolutions": 456}`
+  - Insert into Room database using `start_time` as primary key
+  - Handle duplicates gracefully (REPLACE strategy in DAO)
 - [ ] A3.6 Handle sync errors and retries gracefully
-- [ ] A3.7 Negotiate higher MTU on connection (request 512 bytes)
+  - Connection drops: save partial progress (`lastSyncedStartTime`), retry later
+  - Parse errors: log and skip session, continue loop
+  - MTU negotiation failure: abort sync, notify user
+  - Timeout handling: disconnect after 30 seconds max
 
 ### A4. UI Updates
 
 - [ ] A4.1 Show last sync time in UI
+  - Display timestamp of last successful sync completion
+  - Show "Never synced" if no sync has occurred
 - [ ] A4.2 Display sync status (syncing/idle/error)
+  - During sync: show progress (e.g., "Syncing... 3 sessions remaining")
+  - Use `remaining_sessions` count from protocol
 - [ ] A4.3 Show count of stored sessions
+  - Query total count from Room database
 - [ ] A4.4 Add manual sync trigger button
+  - Trigger immediate sync (bypass WorkManager schedule)
+  - Disable during active sync to prevent conflicts
 - [ ] A4.5 Update UI to work without persistent connection
+  - Remove connection status indicators (no persistent connection)
+  - Show last sync status instead
 
 ### A5. Battery Optimization
 
