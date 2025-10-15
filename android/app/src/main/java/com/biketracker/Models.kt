@@ -7,11 +7,11 @@ package com.biketracker
 /**
  * Represents a CSC (Cycling Speed and Cadence) measurement
  *
- * @property cumulativeRevolutions Total crank revolutions since tracking started
- * @property lastEventTime Time of last crank event in 1/1024 second units
+ * @property cumulativeRevolutions Total crank revolutions (UINT16, wraps at 65536)
+ * @property lastEventTime Time of last crank event in 1/1024 second units (UINT16)
  */
 data class CscMeasurement(
-    val cumulativeRevolutions: UInt,
+    val cumulativeRevolutions: UShort,
     val lastEventTime: UShort
 )
 
@@ -39,27 +39,36 @@ sealed class BleEvent {
  * Bike telemetry state
  *
  * @property cadence Current cadence in RPM (null if no recent data)
- * @property totalRevolutions Total crank revolutions
+ * @property totalRevolutions Total crank revolutions (UINT16, wraps at 65536)
  * @property connectionState Current BLE connection state
  */
 data class BikeState(
     val cadence: Int? = null,
-    val totalRevolutions: UInt = 0u,
+    val totalRevolutions: UShort = 0u,
     val connectionState: ConnectionState = ConnectionState.Disconnected
 )
 
 /**
  * Calculates cadence (RPM) from two consecutive CSC measurements
  *
+ * With 1 Hz continuous notifications, the firmware sends updates even when idle.
+ * When no new revolutions occur, both revDiff and timeDiff will be 0, indicating
+ * the user has stopped pedaling (cadence = 0 RPM).
+ *
  * @param prev Previous CSC measurement
  * @param curr Current CSC measurement
- * @return Cadence in RPM, or null if calculation is not possible
+ * @return Cadence in RPM, or null if this is the first measurement
  */
 fun calculateCadence(prev: CscMeasurement?, curr: CscMeasurement): Int? {
     if (prev == null) return null
 
     val revDiff = (curr.cumulativeRevolutions - prev.cumulativeRevolutions).toInt()
-    if (revDiff <= 0) return null
+
+    // If no new revolutions, user has stopped pedaling
+    if (revDiff == 0) return 0
+
+    // Negative revDiff shouldn't happen, but if it does, ignore this measurement
+    if (revDiff < 0) return null
 
     // Handle time wraparound (UShort wraps at 65536)
     val timeDiff = if (curr.lastEventTime >= prev.lastEventTime) {

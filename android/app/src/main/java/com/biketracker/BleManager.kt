@@ -176,15 +176,15 @@ class BleManager(private val context: Context) {
      * Parses CSC Measurement characteristic data
      *
      * Format (per BLE CSC spec):
-     * - Byte 0: Flags
-     * - Bytes 1-4: Cumulative Crank Revolutions (uint32)
-     * - Bytes 5-6: Last Crank Event Time (uint16, 1/1024 second units)
+     * - Byte 0: Flags (0x02 = crank data present)
+     * - Bytes 1-2: Cumulative Crank Revolutions (uint16)
+     * - Bytes 3-4: Last Crank Event Time (uint16, 1/1024 second units)
      *
      * @param data Raw characteristic data
      * @return Parsed CSC measurement, or null if parsing fails
      */
     private fun parseCscMeasurement(data: ByteArray): CscMeasurement? {
-        if (data.size < 7) {
+        if (data.size < 5) {
             Log.w(TAG, "CSC data too short: ${data.size} bytes")
             return null
         }
@@ -193,7 +193,7 @@ class BleManager(private val context: Context) {
             val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
             buffer.get() // Skip flags
 
-            val cumulativeRevolutions = buffer.int.toUInt()
+            val cumulativeRevolutions = buffer.short.toUShort()
             val lastEventTime = buffer.short.toUShort()
 
             CscMeasurement(cumulativeRevolutions, lastEventTime)

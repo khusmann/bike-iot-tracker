@@ -20,7 +20,6 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val TAG = "BikeViewModel"
-        private const val CADENCE_TIMEOUT_MS = 3000L // Reset cadence after 3 seconds of no new revolutions
     }
 
     private val bleManager = BleManager(application)
@@ -78,32 +77,24 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Updates state with new CSC measurement
+     *
+     * With 1 Hz continuous notifications, we receive updates even when idle.
+     * The calculateCadence function returns 0 when there are no new revolutions,
+     * allowing real-time display of 0 RPM without needing a timeout.
      */
     private fun updateMeasurement(measurement: CscMeasurement) {
         val newCadence = calculateCadence(previousMeasurement, measurement)
         Log.d(TAG, "Updating measurement: revolutions=${measurement.cumulativeRevolutions}, cadence=$newCadence")
 
-        // If we have a new valid cadence, update it and reset the timeout
-        if (newCadence != null) {
-            _state.value = _state.value.copy(
-                cadence = newCadence,
-                totalRevolutions = measurement.cumulativeRevolutions
-            )
+        // Update state with new cadence (can be 0 for idle, or null for first measurement)
+        _state.value = _state.value.copy(
+            cadence = newCadence,
+            totalRevolutions = measurement.cumulativeRevolutions
+        )
 
-            // Cancel any existing timeout and start a new one
-            cadenceTimeoutJob?.cancel()
-            cadenceTimeoutJob = viewModelScope.launch {
-                delay(CADENCE_TIMEOUT_MS)
-                // Reset cadence to null after timeout
-                _state.value = _state.value.copy(cadence = null)
-                Log.d(TAG, "Cadence timeout - resetting to null")
-            }
-        } else {
-            // No new revolutions, just update total revolutions
-            _state.value = _state.value.copy(
-                totalRevolutions = measurement.cumulativeRevolutions
-            )
-        }
+        // Cancel any existing timeout since we're receiving continuous updates
+        cadenceTimeoutJob?.cancel()
+        cadenceTimeoutJob = null
 
         previousMeasurement = measurement
     }
