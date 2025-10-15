@@ -56,7 +56,7 @@ async def blink_led(
 async def ensure_wifi_connected(led: t.Optional[Pin] = None) -> network.WLAN:
     """Ensure WiFi is connected, retrying until successful.
 
-    If WiFi is not connected, blink the LED (if provided) and keep retrying.
+    If WiFi is not connected, blink the LED (if provided) and keep waiting.
 
     Args:
         led: Optional LED pin to blink while waiting for connection.
@@ -66,11 +66,8 @@ async def ensure_wifi_connected(led: t.Optional[Pin] = None) -> network.WLAN:
     """
     wlan = network.WLAN(network.STA_IF)
 
-    retry_count = 0
     while not wlan.isconnected():
-        retry_count += 1
-        log(f"WiFi not connected. Attempt #{retry_count} to reconnect...")
-
+        log(f"Waiting for WiFi to connect...")
         await blink_led(led, SIMPLE_BLINK_PATTERN)
 
     log(f"WiFi connected: {wlan.ifconfig()}")

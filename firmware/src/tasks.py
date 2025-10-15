@@ -5,8 +5,12 @@ All async background tasks are defined here. This centralizes task
 orchestration and makes the concurrent structure of the application
 easy to understand.
 """
+import typing as t
 import asyncio
 from time import ticks_ms, ticks_diff
+from bluetooth import UUID
+
+import aioble
 
 from state import SessionManager, AppState
 from utils import log
@@ -78,3 +82,26 @@ async def session_periodic_save(
         if session_manager.has_active_session():
             log("Periodic save triggered")
             session_manager.save_current_session()
+
+
+async def ble_advertise(device_name: str, services: t.Sequence[UUID]) -> None:
+    """Main BLE advertising loop that spawns independent connection tasks.
+
+    Like a web server, continues advertising after accepting connections,
+    enabling multiple concurrent devices (up to 3-4 on ESP32).
+
+    Args:
+        state: Application state object containing telemetry data.
+        device_name: The device name to advertise.
+    """
+    while True:
+        log(f"Advertising as '{device_name}'...")
+
+        connection = await aioble.advertise(
+            interval_us=250_000,  # 250ms advertising interval
+            name=device_name,
+            services=services,
+            appearance=0x0000,  # Generic appearance
+        )
+
+        log(f"Connected to {connection.device.addr_hex()}")

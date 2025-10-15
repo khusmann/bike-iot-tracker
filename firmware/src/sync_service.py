@@ -65,7 +65,7 @@ def register_sync_service(session_manager: SessionManager) -> aioble.Service:
 
     # Start background task to handle writes
     asyncio.create_task(
-        _handle_session_data_writes(session_data_char, session_manager)
+        handle_session_data_requests(session_data_char, session_manager)
     )
 
     log("Sync Service registered")
@@ -73,7 +73,7 @@ def register_sync_service(session_manager: SessionManager) -> aioble.Service:
     return sync_service
 
 
-async def _handle_session_data_writes(
+async def handle_session_data_requests(
     characteristic: aioble.Characteristic,
     session_manager: SessionManager
 ) -> None:
@@ -111,7 +111,8 @@ async def _handle_session_data_writes(
             # Parse and handle request
             try:
                 if len(request_data) != 4:
-                    error = {"error": "Invalid request length (expected 4 bytes)"}
+                    error = {
+                        "error": "Invalid request length (expected 4 bytes)"}
                     response = json.dumps(error).encode('utf-8')
                 else:
                     # Parse uint32 lastSyncedStartTime

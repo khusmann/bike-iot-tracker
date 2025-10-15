@@ -39,39 +39,6 @@ def on_reed_press(state: AppState) -> None:
     log(f"Revolution {state.telemetry_manager.crank_telemetry.cumulative_revolutions}")
 
 
-async def advertise_and_serve(state: AppState) -> None:
-    """Main BLE advertising loop that spawns independent connection tasks.
-
-    Like a web server, continues advertising after accepting connections,
-    enabling multiple concurrent devices (up to 3-4 on ESP32).
-
-    Args:
-        state: Application state object containing telemetry data.
-    """
-    # Register CSC Service
-    csc_service = register_csc_service(state.telemetry_manager)
-
-    # Register Sync Service
-    sync_service = register_sync_service(state.session_manager)
-
-    # Register all services
-    aioble.register_services(csc_service, sync_service)
-
-    log("BLE services registered (CSC + Sync)")
-
-    while True:
-        log(f"Advertising as '{DEVICE_NAME}'...")
-
-        connection = await aioble.advertise(
-            interval_us=250_000,  # 250ms advertising interval
-            name=DEVICE_NAME,
-            services=[csc_service.uuid, sync_service.uuid],
-            appearance=0x0000,  # Generic appearance
-        )
-
-        log(f"Connection to {connection.device.addr_hex()} spawned, returning to advertising...")
-
-
 async def main() -> None:
     """Main entry point.
 
@@ -111,8 +78,22 @@ async def main() -> None:
 
     log("Background tasks started")
 
-    # Start BLE peripheral with state
-    await advertise_and_serve(state)
+    # Register CSC Service
+    csc_service = register_csc_service(state.telemetry_manager)
+
+    # Register Sync Service
+    sync_service = register_sync_service(state.session_manager)
+
+    # Register all services
+    aioble.register_services(csc_service, sync_service)
+
+    log("BLE services registered (CSC + Sync)")
+
+    # Start BLE advertise as the main task
+    await tasks.ble_advertise(
+        DEVICE_NAME,
+        [csc_service.uuid, sync_service.uuid]
+    )
 
 
 # Run the async main loop
