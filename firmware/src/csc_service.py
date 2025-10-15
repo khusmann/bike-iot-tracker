@@ -1,3 +1,32 @@
+"""BLE Cycling Speed and Cadence (CSC) Service implementation.
+
+Implements the standard BLE CSC Service (0x1816) with continuous notifications.
+
+Notification Behavior:
+    Sends CSC Measurement notifications every 2 seconds, continuously
+    broadcasting the current crank telemetry state (cumulative revolutions
+    and last event time). This includes both active pedaling and idle periods.
+
+    Per the CSC specification (https://www.bluetooth.com/specifications/specs/cycling-speed-and-cadence-profile-1-0/):
+    "In typical applications, the CSC Measurement characteristic is notified
+    approximately once per second. This interval may vary and is determined
+    by the Server and not required to be configurable by the Client."
+
+    We send notifications every 2 seconds (rather than 1 Hz) because with only
+    one reed switch event per crank rotation, slow pedaling would alternate
+    between showing accurate cadence and 0 RPM, causing a flickering display.
+
+    Continuous notifications allow clients to:
+    - Calculate real-time cadence (0 RPM when idle)
+    - Detect connection status
+    - Update UI immediately when state changes
+
+Packet Format:
+    5-byte CSC Measurement per BLE spec:
+    - Byte 0: Flags (0x02 = crank data present)
+    - Bytes 1-2: Cumulative crank revolutions (uint16, little-endian)
+    - Bytes 3-4: Last crank event time (uint16, 1/1024 sec units, little-endian)
+"""
 import asyncio
 import aioble
 import bluetooth
@@ -11,8 +40,8 @@ CSC_SERVICE_UUID = bluetooth.UUID(0x1816)
 # CSC Measurement Characteristic
 CSC_MEASUREMENT_UUID = bluetooth.UUID(0x2A5B)
 
-# Interval for sending notifications when idle (no revolutions) in seconds
-CSC_NOTIFICATION_INTERVAL_S = 0.2
+# Notification interval: ~1 Hz per CSC spec recommendation
+CSC_NOTIFICATION_INTERVAL_S = 2
 
 
 async def notify_csc_subscriptions(
