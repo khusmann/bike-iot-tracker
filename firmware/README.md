@@ -37,26 +37,34 @@ WIFI_PASSWORD=your_password
 **One-time setup via USB:**
 
 1. Connect to the device:
+
    ```bash
    mpremote connect /dev/ttyACM0
    ```
 
 2. Run the WebREPL setup wizard:
+
    ```python
    >>> import webrepl_setup
    ```
+
    Follow the prompts to enable WebREPL and set a password.
 
 3. Push initial files to enable WebREPL:
+
    ```bash
    make push-boot-local
    ```
-   This copies the minimal files needed ([boot.py](boot/boot.py), [config.py](boot/config.py)) via serial.
+
+   This copies the minimal files needed ([boot.py](boot/boot.py),
+   [config.py](boot/config.py)) via serial.
 
 4. Push third-party libraries:
+
    ```bash
    make push-lib
    ```
+
    This copies all device libraries from `3rdparty/device/` to the device.
 
 5. Reboot the device. It will now connect to WiFi and start WebREPL.
@@ -103,7 +111,9 @@ firmware/
 
 ## Managing Dependencies
 
-Third-party dependencies are vendored in the [3rdparty/](3rdparty/) directory. See [3rdparty/README.md](3rdparty/README.md) for details on managing dependencies.
+Third-party dependencies are vendored in the [3rdparty/](3rdparty/) directory.
+See [3rdparty/README.md](3rdparty/README.md) for details on managing
+dependencies.
 
 To update all dependencies:
 
@@ -115,10 +125,46 @@ make update-3rdparty
 
 - **mpremote**: Serial connection and file operations
 - **WebREPL**: Over-the-air file transfers and REPL access
-- Type checking with Pyright (configured in [pyrightconfig.json](pyrightconfig.json))
+- Type checking with Pyright (configured in
+  [pyrightconfig.json](pyrightconfig.json))
 
-## See Also
+## Troubleshooting
+
+### BLE Service Cache Issues
+
+When updating BLE GATT service definitions (adding/removing/modifying
+characteristics), client devices may cache the old service structure. This
+causes "Invalid Handle" errors or shows outdated characteristics.
+
+**Symptoms:**
+
+- Client shows old characteristics after firmware update
+- "Invalid Handle" (ATT error 0x01) when reading/writing characteristics
+- `bluetoothctl list-attributes` shows stale service definitions
+
+**Solution (Linux/BlueZ):**
+
+Delete the cached service data for the specific device:
+
+```bash
+# Find your Bluetooth adapter address
+ls /var/lib/bluetooth/
+
+# Find the BikeTracker device address (e.g., 30:ED:A0:A7:B4:9E)
+# Then delete its cache file
+sudo rm /var/lib/bluetooth/<adapter-address>/cache/<device-address>
+
+# Example:
+# sudo rm /var/lib/bluetooth/00:28:F8:1A:CA:E7/cache/30:ED:A0:A7:B4:9E
+```
+
+To be on the safe side, also remove the device entirely from BlueZ:
+
+```bash
+bluetoothctl
+remove <device-addr
 
 - [TESTING.md](TESTING.md) - Testing procedures and tools
 - [3rdparty/README.md](3rdparty/README.md) - Dependency management
 - [CLAUDE.md](../CLAUDE.md) - System specification and design principles
+```

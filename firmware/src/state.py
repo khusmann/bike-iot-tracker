@@ -67,8 +67,7 @@ class SessionManager:
     def start_session(self) -> Session:
         """Start a new cycling session.
 
-        Creates a new session with the current timestamp and increments
-        the session ID counter.
+        Creates a new session with the current timestamp as its unique identifier.
 
         Returns:
             The newly created Session.
@@ -77,19 +76,14 @@ class SessionManager:
             log("Warning: Starting new session while another is active")
 
         current_time = int(time.time())
-        session_id = self.store.next_id
 
         self.current_session = Session(
-            id=session_id,
             start_time=current_time,
             end_time=current_time,
             revolutions=0,
-            synced=False
         )
 
-        self.store.next_id += 1
-
-        log(f"Started session {session_id} at {current_time}")
+        log(f"Started session at {current_time}")
         return self.current_session
 
     def end_session(self) -> t.Optional[Session]:
@@ -114,7 +108,7 @@ class SessionManager:
         # Save to disk
         write_session_store(self.store, SESSIONS_FILE)
 
-        log(f"Ended session {self.current_session.id}: "
+        log(f"Ended session {self.current_session.start_time}: "
             f"{self.current_session.revolutions} revolutions, "
             f"duration={(self.current_session.end_time - self.current_session.start_time)}s")
 
@@ -136,7 +130,7 @@ class SessionManager:
             self.current_session.revolutions += 1
             self.current_session.end_time = int(time.time())
             log(
-                f"Session {self.current_session.id}: "
+                f"Session {self.current_session.start_time}: "
                 f"revolution {self.current_session.revolutions}"
             )
 
@@ -162,41 +156,28 @@ class SessionManager:
         self.store.sessions.pop()  # Remove it (not truly ended yet)
 
         if success:
-            log(f"Saved active session {self.current_session.id} "
+            log(f"Saved active session {self.current_session.start_time} "
                 f"({self.current_session.revolutions} revs)")
         else:
-            log(f"Failed to save active session {self.current_session.id}")
+            log(f"Failed to save active session {self.current_session.start_time}")
 
         return success
 
-    def get_unsynced_sessions(self) -> list[Session]:
-        """Get all sessions that haven't been synced yet.
+    def get_sessions_since(self, start_time: int) -> list[Session]:
+        """Get all sessions that started after the given timestamp.
 
-        Returns:
-            List of unsynced sessions (synced=False).
-        """
-        unsynced = [s for s in self.store.sessions if not s.synced]
-        log(f"Found {len(unsynced)} unsynced sessions")
-        return unsynced
-
-    def mark_session_synced(self, session_id: int) -> bool:
-        """Mark a session as synced.
+        Returns sessions sorted by start_time in ascending order.
 
         Args:
-            session_id: ID of the session to mark as synced.
+            start_time: Unix timestamp. Returns sessions where s.start_time > start_time.
 
         Returns:
-            True if session found and marked, False otherwise.
+            List of sessions after the given timestamp, sorted by start_time.
         """
-        for session in self.store.sessions:
-            if session.id == session_id:
-                session.synced = True
-                write_session_store(self.store, SESSIONS_FILE)
-                log(f"Marked session {session_id} as synced")
-                return True
-
-        log(f"Session {session_id} not found")
-        return False
+        sessions = [s for s in self.store.sessions if s.start_time > start_time]
+        sessions.sort(key=lambda s: s.start_time)
+        log(f"Found {len(sessions)} sessions since {start_time}")
+        return sessions
 
     def has_active_session(self) -> bool:
         """Check if there is currently an active session.

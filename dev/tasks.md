@@ -115,12 +115,156 @@ Tasks for **Stage 3: Background Sync Architecture**
   - Test with multiple sessions, verify JSON parsing
   - Test connection drops mid-sync (manual disconnect)
 
-### F3. Integration & Testing
+### F3. Multi-Client Sync Refactor (Timestamp-Based IDs)
 
-- [ ] F3.1 Test session persistence across reboots
-- [ ] F3.2 Verify session boundary detection with various idle periods
-- [ ] F3.3 Test sync protocol with multiple unsynced sessions
-- [ ] F3.4 Ensure WiFi/WebREPL still works for development
+**Rationale:** Current `synced: bool` flag doesn't work with multiple clients. Solution: Use `start_time` as the session ID (unique due to 30s idle timeout), remove `synced` flag and `next_id` counter. Clients track their own `lastSyncedStartTime` locally.
+
+**Benefits:**
+- Multi-client safe: each client independently syncs sessions > their last timestamp
+- Survives bike storage resets: new sessions always have later timestamps
+- Simpler: removes 3 pieces of state (`synced`, `next_id`, redundant id field)
+- Cleaner protocol: no "mark synced" round-trip needed
+
+#### Firmware Changes
+
+- [x] F3.1 Update Session model (models.py)
+  - Use `start_time` as unique identifier (remove separate `id` field if exists)
+  - Remove `synced: bool` field
+  - Keep: `start_time`, `end_time`, `revolutions`
+  - Update `to_dict()` and `from_dict()` to reflect schema changes
+  - Add docstring clarifying `start_time` serves as unique ID
+- [x] F3.2 Update SessionStore model (models.py)
+  - Remove `next_id: int` field (no longer needed)
+  - Update `to_dict()` and `from_dict()` to reflect schema changes
+- [x] F3.3 Update SessionManager (state.py)
+  - Modify `start_session()`: use `current_time` as session identifier
+  - Remove `mark_session_synced()` method (no longer needed)
+  - Remove `get_unsynced_sessions()` method
+  - Add `get_sessions_since(start_time: int) -> list[Session]` method
+    - Returns sessions where `s.start_time > start_time`
+    - Sorted by start_time ascending
+- [x] F3.4 Update Sync Service protocol (sync_service.py)
+  - Remove Session Range characteristic (0xFF01) entirely:
+    - Remove characteristic registration
+    - Remove `create_session_range_response()` function
+  - Modify Session Data characteristic (0xFF02) to be client-driven loop:
+    - Request format: uint32 little-endian (lastSyncedStartTime - timestamp)
+    - Response format:
+      ```json
+      {
+        "session": {"start_time": 1728849600, "end_time": 1728851400, "revolutions": 456},
+        "remaining_sessions": 2
+      }
+      ```
+      Or if no more sessions: `{"session": null, "remaining_sessions": 0}`
+    - Handler logic:
+      - Receive lastSyncedStartTime from write
+      - Find next session where `s.start_time > lastSyncedStartTime` (sorted order)
+      - If found: return session + count of remaining sessions after this one
+      - If not found: return null session + 0 remaining
+    - Remove `synced` check (all sessions requestable)
+    - **MTU Note:** Response ~102 bytes, requires MTU negotiation (client must request 185+ bytes)
+  - Remove Mark Synced characteristic (0xFF03) entirely:
+    - Remove characteristic registration
+    - Remove `_handle_mark_synced_writes()` background task
+    - Update service registration in main.py to not include it
+- [x] F3.5 Update test_ble_client.py
+  - Remove Session Range characteristic code (no longer exists)
+  - Update Session Data request protocol:
+    - Write uint32 lastSyncedStartTime (little-endian, 4 bytes)
+    - Read JSON response: `{"session": {...}, "remaining_sessions": N}`
+    - Parse and handle null session (termination condition)
+  - Implement sync loop:
+    ```python
+    last_synced = 0
+    while True:
+        write_uint32(last_synced)
+        response = read_json()
+        if response["session"] is None:
+            break
+        print(f"Session: {response['session']}, Remaining: {response['remaining_sessions']}")
+        last_synced = response["session"]["start_time"]
+    ```
+  - Remove Mark Synced test code entirely
+  - Test with multiple "clients" (run twice, verify both can sync same sessions)
+  - Test progress indication (verify remaining_sessions decrements correctly)
+
+#### Android App Changes
+
+- [ ] F3.6 Update sync protocol (BleManager or new SyncManager)
+  - **MTU Negotiation (CRITICAL):**
+    - Call `gatt.requestMtu(512)` in `onConnectionStateChange` when connected
+    - Wait for `onMtuChanged()` callback before starting sync
+    - Verify MTU >= 185 bytes (response size ~102 bytes + overhead)
+    - Log warning/error if MTU negotiation fails
+  - Add SharedPreferences key: `LAST_SYNCED_START_TIME` (Long, default 0)
+  - Implement sync loop:
+    ```kotlin
+    var lastSynced = prefs.getLong("LAST_SYNCED_START_TIME", 0L)
+
+    while (true) {
+        // Write lastSyncedStartTime as uint32 little-endian
+        characteristic.write(lastSynced.toUInt32LE())
+
+        // Read response
+        val response = characteristic.read().parseJson()
+        // {"session": {...}, "remaining_sessions": N} or {"session": null, "remaining_sessions": 0}
+
+        if (response.session == null) {
+            break  // No more sessions
+        }
+
+        // Optional: Update UI with progress
+        Log.d("Sync", "Remaining: ${response.remaining_sessions}")
+
+        // Store session in local database
+        database.insert(response.session)
+
+        // Update pointer for next request
+        lastSynced = response.session.start_time
+    }
+
+    // Persist final sync state
+    prefs.edit().putLong("LAST_SYNCED_START_TIME", lastSynced).apply()
+    ```
+  - Handle errors gracefully:
+    - Connection drops: save partial progress (lastSynced), retry later
+    - Parse errors: log and skip session
+    - MTU too small: disconnect and warn user
+- [ ] F3.7 Update local database schema (if started)
+  - Change session primary key from auto-increment to `start_time` (Long)
+  - Remove any `synced` tracking if present
+  - Add migration if database already exists
+- [ ] F3.8 Update Models.kt (if session model exists)
+  - Change session ID type from Int/auto to Long (Unix timestamp)
+  - Remove any `synced` field if present
+
+### F4. Integration & Testing
+
+- [ ] F4.1 Test session persistence across reboots
+- [ ] F4.2 Verify session boundary detection with various idle periods
+- [ ] F4.3 Test multi-client sync:
+  - Run test_ble_client.py twice in succession with different lastSyncedStartTime values
+  - Verify both syncs get all requested sessions (no "already synced" errors)
+  - Verify each can independently track progress from different starting points
+  - Example: Client A syncs from 0, Client B syncs from middle timestamp
+- [ ] F4.4 Test bike storage reset scenario:
+  - Delete /sessions.json on bike
+  - Do some rides (new sessions with current timestamps)
+  - Verify old client with old lastSyncedStartTime still syncs new sessions correctly
+  - Confirm old sessions are gone, new sessions have later timestamps
+- [ ] F4.8 Test MTU handling:
+  - Verify firmware response fits in negotiated MTU
+  - Test with low MTU devices (if available)
+  - Confirm graceful failure if MTU < 185 bytes
+- [ ] F4.5 Ensure WiFi/WebREPL still works for development
+- [ ] F4.6 Test with realistic session load (50+ sessions)
+- [ ] F4.7 Verify sync protocol with edge cases:
+  - Request with lastSyncedStartTime = 0 (should return first session)
+  - Request with lastSyncedStartTime = last session (should return null session)
+  - Request with lastSyncedStartTime in future (should return null session)
+  - Connection drops mid-sync (should resume from lastSynced on reconnect)
+  - Verify remaining_sessions count is accurate throughout sync
 
 ## Android App Tasks
 

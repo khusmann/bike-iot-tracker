@@ -29,9 +29,7 @@ CSC_MEASUREMENT_UUID = "00002a5b-0000-1000-8000-00805f9b34fb"  # 0x2A5B
 
 # Sync Service
 SYNC_SERVICE_UUID = "0000ff00-0000-1000-8000-00805f9b34fb"
-SESSION_RANGE_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
-SESSION_DATA_UUID = "0000ff02-0000-1000-8000-00805f9b34fb"
-MARK_SYNCED_UUID = "0000ff03-0000-1000-8000-00805f9b34fb"
+SESSION_DATA_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
 
 # Device name to search for
 DEVICE_NAME = "BikeTracker"
@@ -128,7 +126,7 @@ class CSCClient:
 
 
 class SyncClient:
-    """BLE client for Sync service"""
+    """BLE client for Sync service using timestamp-based protocol"""
 
     def __init__(self):
         self.client: Optional[BleakClient] = None
@@ -146,37 +144,26 @@ class SyncClient:
 
         raise RuntimeError(f"Could not find device '{DEVICE_NAME}'")
 
-    async def read_session_range(self, client: BleakClient) -> dict:
-        """Read Session Range characteristic.
+    async def request_next_session(
+        self, client: BleakClient, last_synced_start_time: int
+    ) -> dict:
+        """Request next session after the given timestamp.
 
-        Returns:
-            Dictionary with 'start' and 'count' keys.
-        """
-        print(f"\nReading Session Range ({SESSION_RANGE_UUID})...")
-        data = await client.read_gatt_char(SESSION_RANGE_UUID)
-        json_str = data.decode('utf-8')
-        response = json.loads(json_str)
-        print(f"Session Range: {response}")
-        return response
-
-    async def request_session(self, client: BleakClient, session_id: int) -> dict:
-        """Request session data by writing session_id to Session Data characteristic.
-
-        Protocol: Write session_id, then read the response.
+        Protocol: Write uint32 lastSyncedStartTime, read JSON response.
 
         Args:
             client: BleakClient instance
-            session_id: Session ID to request
+            last_synced_start_time: Unix timestamp of last synced session (0 for first)
 
         Returns:
-            Dictionary with session data or error
+            Dictionary with:
+              - "session": Session data dict (or None if no more sessions)
+              - "remaining_sessions": Count of remaining sessions
         """
-        print(f"\nRequesting session {session_id}...")
+        # Pack lastSyncedStartTime as uint32 little-endian
+        request_data = struct.pack('<I', last_synced_start_time)
 
-        # Pack session_id as uint16 little-endian
-        request_data = struct.pack('<H', session_id)
-
-        # Write session_id to Session Data characteristic
+        # Write timestamp to Session Data characteristic
         await client.write_gatt_char(
             SESSION_DATA_UUID,
             request_data,
@@ -193,88 +180,57 @@ class SyncClient:
         json_str = response_data.decode('utf-8')
         response = json.loads(json_str)
 
-        if 'error' in response:
-            print(f"  Error: {response['error']}")
-        else:
-            print(f"  Session data: {response}")
-
         return response
 
-    async def mark_synced(self, client: BleakClient, session_id: int) -> dict:
-        """Mark a session as synced.
-
-        Protocol: Write session_id, then read the response.
+    async def sync_all_sessions(
+        self, client: BleakClient, start_from: int = 0
+    ) -> list[dict]:
+        """Orchestrate full sync flow using timestamp-based protocol.
 
         Args:
             client: BleakClient instance
-            session_id: Session ID to mark as synced
+            start_from: Unix timestamp to start syncing from (0 = all sessions)
 
         Returns:
-            Dictionary with success status or error
-        """
-        print(f"Marking session {session_id} as synced...")
-
-        # Pack session_id as uint16 little-endian
-        request_data = struct.pack('<H', session_id)
-
-        # Write session_id to Mark Synced characteristic
-        await client.write_gatt_char(
-            MARK_SYNCED_UUID,
-            request_data,
-            response=True
-        )
-
-        # Small delay to let the ESP32 process the request
-        await asyncio.sleep(0.5)
-
-        # Read the response from the same characteristic
-        response_data = await client.read_gatt_char(MARK_SYNCED_UUID)
-
-        # Parse JSON response
-        json_str = response_data.decode('utf-8')
-        response = json.loads(json_str)
-
-        if 'error' in response:
-            print(f"  Error: {response['error']}")
-        else:
-            print(f"  Success!")
-
-        return response
-
-    async def sync_all_sessions(self, client: BleakClient) -> None:
-        """Orchestrate full sync flow: read range, request sessions, mark synced.
-
-        Args:
-            client: BleakClient instance
+            List of synced session dictionaries
         """
         print("\n" + "="*60)
-        print("SYNC PROTOCOL TEST")
+        print("SYNC PROTOCOL TEST (Timestamp-Based)")
         print("="*60)
+        print(f"Syncing sessions since timestamp: {start_from}")
 
-        # Step 1: Read session range
-        range_data = await self.read_session_range(client)
-        start = range_data.get('start', 0)
-        count = range_data.get('count', 0)
-
-        if count == 0:
-            print("\nNo unsynced sessions found.")
-            return
-
-        print(
-            f"\nFound {count} unsynced sessions (IDs {start} to {start + count - 1})")
-
-        # Step 2: Request each session
         synced_sessions = []
-        for session_id in range(start, start + count):
-            session_data = await self.request_session(client, session_id)
+        last_synced = start_from
 
-            if 'error' not in session_data:
-                synced_sessions.append(session_data)
+        # Client-driven loop
+        while True:
+            print(f"\nRequesting sessions after {last_synced}...")
 
-                # Step 3: Mark as synced
-                await self.mark_synced(client, session_id)
-            else:
-                print(f"  Skipping session {session_id} due to error")
+            response = await self.request_next_session(client, last_synced)
+
+            # Check for errors
+            if 'error' in response:
+                print(f"Error: {response['error']}")
+                break
+
+            # Check if we're done
+            session = response.get('session')
+            remaining = response.get('remaining_sessions', 0)
+
+            if session is None:
+                print("No more sessions to sync.")
+                break
+
+            # Got a session!
+            print(f"Received session {session['start_time']}")
+            print(f"  Revolutions: {session['revolutions']}")
+            print(f"  Duration: {session['end_time'] - session['start_time']}s")
+            print(f"  Remaining: {remaining}")
+
+            synced_sessions.append(session)
+
+            # Update our pointer for next request
+            last_synced = session['start_time']
 
         # Print summary
         print("\n" + "="*60)
@@ -284,8 +240,10 @@ class SyncClient:
         for session in synced_sessions:
             duration = session['end_time'] - session['start_time']
             print(
-                f"  Session {session['id']}: {session['revolutions']} revs, {duration}s duration")
+                f"  Session {session['start_time']}: {session['revolutions']} revs, {duration}s")
         print("="*60 + "\n")
+
+        return synced_sessions
 
     async def test_sync(self) -> None:
         """Connect to device and test sync protocol"""
@@ -298,6 +256,12 @@ class SyncClient:
         async with BleakClient(address) as client:
             self.client = client
             print(f"Connected: {client.is_connected}")
+
+            # MTU check (if available)
+            # Response size ~102 bytes + overhead requires ~185+ bytes MTU
+            # Note: bleak handles MTU negotiation automatically on most platforms
+            print("\nNote: MTU negotiation is handled automatically by bleak")
+            print("Response size ~102 bytes requires MTU >= 185 bytes")
 
             # Print services for debugging
             print("\nDiscovered services:")

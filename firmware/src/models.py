@@ -45,18 +45,18 @@ class CrankTelemetry:
 class Session:
     """Single cycling session.
 
+    The start_time serves as the unique identifier for the session.
+    This design supports multiple sync clients and survives storage resets,
+    as timestamps are naturally monotonic and unique (30s minimum between sessions).
+
     Attributes:
-        id: Unique session identifier (monotonically increasing).
-        start_time: Unix timestamp in seconds when session started.
+        start_time: Unix timestamp in seconds when session started (serves as unique ID).
         end_time: Unix timestamp in seconds when session ended (or last update).
         revolutions: Total crank revolutions in this session.
-        synced: Whether this session has been synced to the mobile app.
     """
-    id: int = 0
     start_time: int = 0
     end_time: int = 0
     revolutions: int = 0
-    synced: bool = False
 
     def to_dict(self) -> dict[str, t.Any]:
         """Convert Session to dictionary for JSON serialization.
@@ -65,11 +65,9 @@ class Session:
             Dictionary representation of session.
         """
         return {
-            "id": self.id,
             "start_time": self.start_time,
             "end_time": self.end_time,
             "revolutions": self.revolutions,
-            "synced": self.synced
         }
 
     @classmethod
@@ -83,24 +81,23 @@ class Session:
             Session instance.
         """
         return Session(
-            id=data["id"],
             start_time=data["start_time"],
             end_time=data["end_time"],
             revolutions=data["revolutions"],
-            synced=data.get("synced", False)
         )
 
 
 @dataclass
 class SessionStore:
-    """Container for all sessions and metadata.
+    """Container for all sessions.
+
+    Sessions are identified by their start_time timestamp, so no separate
+    ID counter is needed.
 
     Attributes:
-        sessions: List of all stored sessions.
-        next_id: Next available session ID (auto-increments).
+        sessions: List of all stored sessions, sorted by start_time.
     """
     sessions: list[Session] = field(default_factory=lambda: [])
-    next_id: int = 0
 
     def to_dict(self) -> dict[str, t.Any]:
         """Convert SessionStore to dictionary for JSON serialization.
@@ -110,7 +107,6 @@ class SessionStore:
         """
         return {
             "sessions": [s.to_dict() for s in self.sessions],
-            "next_id": self.next_id
         }
 
     @classmethod
@@ -124,8 +120,9 @@ class SessionStore:
             SessionStore instance.
         """
         sessions = [Session.from_dict(s) for s in data.get("sessions", [])]
-        next_id = data.get("next_id", 0)
-        return SessionStore(sessions=sessions, next_id=next_id)
+        # Sort sessions by start_time to maintain consistent ordering
+        sessions.sort(key=lambda s: s.start_time)
+        return SessionStore(sessions=sessions)
 
     def to_json(self) -> str:
         """Serialize SessionStore to JSON string.
