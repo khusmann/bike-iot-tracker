@@ -127,23 +127,23 @@ Tasks for **Stage 3: Background Sync Architecture**
 
 #### Firmware Changes
 
-- [ ] F3.1 Update Session model (models.py)
+- [x] F3.1 Update Session model (models.py)
   - Use `start_time` as unique identifier (remove separate `id` field if exists)
   - Remove `synced: bool` field
   - Keep: `start_time`, `end_time`, `revolutions`
   - Update `to_dict()` and `from_dict()` to reflect schema changes
   - Add docstring clarifying `start_time` serves as unique ID
-- [ ] F3.2 Update SessionStore model (models.py)
+- [x] F3.2 Update SessionStore model (models.py)
   - Remove `next_id: int` field (no longer needed)
   - Update `to_dict()` and `from_dict()` to reflect schema changes
-- [ ] F3.3 Update SessionManager (state.py)
+- [x] F3.3 Update SessionManager (state.py)
   - Modify `start_session()`: use `current_time` as session identifier
   - Remove `mark_session_synced()` method (no longer needed)
   - Remove `get_unsynced_sessions()` method
   - Add `get_sessions_since(start_time: int) -> list[Session]` method
     - Returns sessions where `s.start_time > start_time`
     - Sorted by start_time ascending
-- [ ] F3.4 Update Sync Service protocol (sync_service.py)
+- [x] F3.4 Update Sync Service protocol (sync_service.py)
   - Remove Session Range characteristic (0xFF01) entirely:
     - Remove characteristic registration
     - Remove `create_session_range_response()` function
@@ -168,7 +168,7 @@ Tasks for **Stage 3: Background Sync Architecture**
     - Remove characteristic registration
     - Remove `_handle_mark_synced_writes()` background task
     - Update service registration in main.py to not include it
-- [ ] F3.5 Update test_ble_client.py
+- [x] F3.5 Update test_ble_client.py
   - Remove Session Range characteristic code (no longer exists)
   - Update Session Data request protocol:
     - Write uint32 lastSyncedStartTime (little-endian, 4 bytes)
