@@ -28,9 +28,11 @@ Packet Format:
     - Bytes 3-4: Last crank event time (uint16, 1/1024 sec units, little-endian)
 """
 import asyncio
+import struct
 import aioble
 import bluetooth
 
+from models import CrankTelemetry
 from state import TelemetryManager
 from utils import log
 
@@ -40,8 +42,43 @@ CSC_SERVICE_UUID = bluetooth.UUID(0x1816)
 # CSC Measurement Characteristic
 CSC_MEASUREMENT_UUID = bluetooth.UUID(0x2A5B)
 
+# CSC timing constants
+# Time is measured in 1/1024 second units per BLE CSC spec
+CSC_TIME_UNIT_HZ = 1024
+
 # Notification interval: ~1 Hz per CSC spec recommendation
 CSC_NOTIFICATION_INTERVAL_S = 2
+
+
+def crank_telemetry_to_csc_measurement(telemetry: CrankTelemetry) -> bytes:
+    """Format crank telemetry as CSC Measurement per BLE spec.
+
+    Converts the physical time to CSC time units and wraps appropriately.
+
+    Args:
+        telemetry: CrankTelemetry instance to format.
+
+    Returns:
+        5-byte CSC measurement packet:
+            - Byte 0: Flags (bit 1 = crank revolution data present)
+            - Bytes 1-2: Cumulative crank revolutions (uint16, little-endian)
+            - Bytes 3-4: Last crank event time (uint16, little-endian, 1/1024 sec units)
+    """
+    # Convert milliseconds to 1/1024 second units
+    time_in_units = (
+        telemetry.last_physical_time_ms * CSC_TIME_UNIT_HZ
+    ) // 1000
+
+    # Wrap at 16 bits (0-65535) per BLE spec
+    wrapped_time = time_in_units & 0xFFFF
+
+    flags = 0x02  # Bit 1: Crank Revolution Data Present
+    return struct.pack(
+        '<BHH',
+        flags,
+        telemetry.cumulative_revolutions,
+        wrapped_time
+    )
 
 
 async def notify_csc_subscriptions(
@@ -63,9 +100,11 @@ async def notify_csc_subscriptions(
         # Sleep briefly for responsiveness to disconnection
         await asyncio.sleep(CSC_NOTIFICATION_INTERVAL_S)
 
-        try:
-            measurement_data = telemetry_manager.crank_telemetry.to_csc_measurement()
+        measurement_data = crank_telemetry_to_csc_measurement(
+            telemetry_manager.crank_telemetry
+        )
 
+        try:
             # Notify all subscribed clients (send_update = True)
             characteristic.write(measurement_data, send_update=True)
         except Exception as e:

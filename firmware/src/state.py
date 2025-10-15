@@ -11,10 +11,6 @@ from models import Session, SessionStore, CrankTelemetry
 from storage import read_session_store, write_session_store
 from utils import log
 
-# CSC timing constants
-# Time is measured in 1/1024 second units per BLE CSC spec
-CSC_TIME_UNIT_HZ = 1024
-
 # File to save sessions to
 SESSIONS_FILE = "/sessions.json"
 
@@ -24,8 +20,7 @@ class TelemetryManager:
     """Manages telemetry state for BLE CSC notifications.
 
     Attributes:
-        TIME_UNIT_HZ: CSC time unit frequency (1024 Hz per BLE spec).
-        current_telemetry: Current telemetry state.
+        crank_telemetry: Current telemetry state.
     """
 
     crank_telemetry: CrankTelemetry = field(default_factory=CrankTelemetry)
@@ -34,17 +29,12 @@ class TelemetryManager:
         """Record a new revolution by updating state in place."""
         current_time_ms = time.ticks_ms()
 
-        # Convert milliseconds to 1/1024 second units
-        time_in_units = (current_time_ms * CSC_TIME_UNIT_HZ) // 1000
-        # Wrap at 16 bits (0-65535) per BLE spec
-        wrapped_time = time_in_units & 0xFFFF
         # Wrap at 16 bits per CSC spec
         wrapped_revolutions = (
             self.crank_telemetry.cumulative_revolutions + 1
-        ) & 0xFFFF  # Wrap at 16 bits
+        ) & 0xFFFF
 
         self.crank_telemetry.cumulative_revolutions = wrapped_revolutions
-        self.crank_telemetry.last_event_time = wrapped_time
         self.crank_telemetry.last_physical_time_ms = current_time_ms
 
 
