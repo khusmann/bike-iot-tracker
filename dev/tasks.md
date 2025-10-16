@@ -294,45 +294,54 @@ Tasks for **Stage 3: Background Sync to HealthConnect**
 
 ### A3. Sync Implementation
 
+**Note:** Implementation happens in `BackgroundSyncWorker.performSync()` which currently has a TODO placeholder.
+
 - [ ] A3.1 **CRITICAL: MTU Negotiation**
   - Call `gatt.requestMtu(512)` immediately after connection established
   - Wait for `onMtuChanged()` callback before starting sync
   - Verify negotiated MTU >= 185 bytes (response ~102 bytes + overhead)
   - If MTU < 185: log error, disconnect, notify user
   - Connection flow: connect → negotiate MTU → sync → disconnect
-- [ ] A3.2 Get last synced timestamp from HealthConnect
-  - At sync start, call helper from A2.4 to get lastSyncedStartTime for this bike
-  - Use bluetoothDevice.address as bike identifier
+- [x] A3.2 Get last synced timestamp from HealthConnect
+  - Already implemented in `HealthConnectHelper.getLastSyncedTimestamp()`
+  - Call this method from `BackgroundSyncWorker.performSync()` after connecting
+  - Use `device.address` as bike identifier
   - No SharedPreferences needed - HealthConnect is source of truth
-- [ ] A3.3 Create BLE sync service/manager
-  - Connect to Bike Tracker Sync Service (UUID 0x0000FF00-...)
-  - Reference only Session Data characteristic (0xFF02) - other characteristics removed in F3
+- [ ] A3.3 Implement GATT connection and service discovery
+  - Device scanning already implemented in `BackgroundSyncWorker.scanForDevice()`
+  - Add GATT connection to discovered device in `performSync()`
+  - Discover services and locate Bike Tracker Sync Service (UUID 0x0000FF00-...)
+  - Get reference to Session Data characteristic (0xFF02) - other characteristics removed in F3
+  - Handle connection callbacks (onConnectionStateChange, onServicesDiscovered)
 - [ ] A3.4 Implement timestamp-based sync loop
-  - Get `lastSyncedStartTime` from HealthConnect (via A2.4 helper)
+  - Get `lastSyncedStartTime` from HealthConnect (via `HealthConnectHelper.getLastSyncedTimestamp()`)
   - Loop:
     - Write `lastSyncedStartTime` as uint32 little-endian (4 bytes) to 0xFF02
-    - Read JSON response: `{"session": {...}, "remaining_sessions": N}` or `{"session": null, "remaining_sessions": 0}`
+    - Use `gatt.writeCharacteristic()` with WRITE_TYPE_DEFAULT (write-with-response)
+    - Wait for `onCharacteristicWrite()` callback
+    - Read response via `gatt.readCharacteristic()` and wait for `onCharacteristicRead()`
+    - Parse JSON response: `{"session": {...}, "remaining_sessions": N}` or `{"session": null, "remaining_sessions": 0}`
     - If session is null: break (sync complete)
-    - Convert session to HealthConnect ExerciseSessionRecord with bike ID
+    - Convert session to HealthConnect ExerciseSessionRecord with bike ID (see A3.5)
     - Write session to HealthConnect immediately
     - Update `lastSyncedStartTime = session.start_time`
-    - Optional: Update UI with progress using `remaining_sessions` count
+    - Optional: Update UI/logs with progress using `remaining_sessions` count
   - No need to persist lastSyncedStartTime - HealthConnect is source of truth
 - [ ] A3.5 Convert and write sessions to HealthConnect with bike identifier
-  - JSON schema: `{"start_time": 1728849600, "end_time": 1728851400, "revolutions": 456}`
-  - Get bike ID from bluetoothDevice.address (e.g., "AA:BB:CC:DD:EE:FF")
+  - JSON schema from firmware: `{"start_time": 1728849600, "end_time": 1728851400, "revolutions": 456}`
+  - Get bike ID from `device.address` (e.g., "AA:BB:CC:DD:EE:FF")
   - Create ExerciseSessionRecord with:
     - exerciseType: EXERCISE_TYPE_CYCLING
     - startTime: Instant.ofEpochSecond(session.start_time)
     - endTime: Instant.ofEpochSecond(session.end_time)
     - title: "Stationary Bike" (optional)
-    - metadata: Metadata.autoRecorded(
-        clientRecordId: "bike-${bikeId}-${session.start_time}"
-        device: Device(type = Device.TYPE_UNKNOWN)
+    - metadata: Metadata(
+        clientRecordId: "bike-${bikeId}-${session.start_time}",
+        dataOrigin: DataOrigin(packageName)
       )
-  - Use HealthConnectClient.insertRecords() to write
-  - clientRecordId ensures uniqueness and enables per-bike last sync queries
-  - Handle duplicates gracefully (HealthConnect deduplicates automatically)
+  - Use `HealthConnectClient.insertRecords()` to write
+  - clientRecordId format matches what `HealthConnectHelper.getLastSyncedTimestamp()` queries
+  - Handle duplicates gracefully (HealthConnect deduplicates by clientRecordId automatically)
 - [ ] A3.6 Handle sync errors and retries gracefully
   - Connection drops: partial progress auto-saved in HealthConnect, next sync resumes from last written session
   - Parse errors: log and skip session, continue loop
