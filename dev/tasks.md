@@ -277,16 +277,16 @@ Tasks for **Stage 3: Background Sync to HealthConnect**
 
 ### A2. HealthConnect Setup
 
-- [ ] A2.1 Add HealthConnect dependency (androidx.health.connect:connect-client)
-- [ ] A2.2 Request HealthConnect permissions
+- [x] A2.1 Add HealthConnect dependency (androidx.health.connect:connect-client)
+- [x] A2.2 Request HealthConnect permissions
   - WRITE_EXERCISE permission for ExerciseSessionRecord
   - READ_EXERCISE permission for querying last synced session
   - Handle permission request flow in UI
-- [ ] A2.3 Check HealthConnect availability
+- [x] A2.3 Check HealthConnect availability
   - Verify SDK version (API 28+)
   - Check if HealthConnect app is installed
   - Handle gracefully if unavailable
-- [ ] A2.4 Implement helper to query last synced session for a bike
+- [x] A2.4 Implement helper to query last synced session for a bike
   - Query HealthConnect for ExerciseSessionRecords (descending order, pageSize=100)
   - Filter by clientRecordId prefix: `"bike-${bluetoothDevice.address}-"`
   - Return max startTime (or 0 if none found)

@@ -41,11 +41,13 @@ sealed class BleEvent {
  * @property cadence Current cadence in RPM (null if no recent data)
  * @property totalRevolutions Total crank revolutions (UINT16, wraps at 65536)
  * @property connectionState Current BLE connection state
+ * @property healthConnectAvailable Whether HealthConnect is available on this device
  */
 data class BikeState(
     val cadence: Int? = null,
     val totalRevolutions: UShort = 0u,
-    val connectionState: ConnectionState = ConnectionState.Disconnected
+    val connectionState: ConnectionState = ConnectionState.Disconnected,
+    val healthConnectAvailable: Boolean = false
 )
 
 /**
