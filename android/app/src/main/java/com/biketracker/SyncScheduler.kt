@@ -4,7 +4,9 @@ import android.content.Context
 import android.util.Log
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
@@ -48,6 +50,33 @@ object SyncScheduler {
         )
 
         Log.d(TAG, "Background sync scheduling ensured (every 15 minutes, KEEP policy)")
+    }
+
+    /**
+     * Trigger an immediate one-time sync
+     *
+     * This bypasses the periodic schedule and runs a sync immediately.
+     * Useful for manual sync triggers from the UI.
+     *
+     * @param context Application context
+     */
+    fun triggerImmediateSync(context: Context) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
+            .build()
+
+        val syncWorkRequest = OneTimeWorkRequestBuilder<BackgroundSyncWorker>()
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "${BackgroundSyncWorker.WORK_NAME}_manual",
+            // KEEP means if a manual sync is already running, don't start another
+            ExistingWorkPolicy.KEEP,
+            syncWorkRequest
+        )
+
+        Log.d(TAG, "Manual sync triggered")
     }
 
     /**
