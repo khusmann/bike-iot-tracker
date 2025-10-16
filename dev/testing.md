@@ -361,10 +361,10 @@ SyncScheduler.schedulePeriodicSync(applicationContext)
 After completing these tests:
 
 1. **Mark A1 tasks as complete** in [tasks.md](../dev/tasks.md)
-2. **Proceed to A2**: Local Database implementation
-3. **Then A3**: Full sync protocol implementation (actual data transfer)
+2. **Proceed to A2**: HealthConnect Setup (permissions, query helper)
+3. **Then A3**: Full sync protocol implementation (BLE sync → HealthConnect)
 
-The current implementation verifies the background infrastructure works. The actual session data sync will be added in A3 when connecting to the Sync Service (0xFF00).
+The current implementation verifies the background infrastructure works. The actual session data sync will be added in A3 when connecting to the Sync Service (0xFF00) and writing to HealthConnect.
 
 ---
 

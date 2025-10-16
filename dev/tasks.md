@@ -1,6 +1,6 @@
 # Tasks
 
-Tasks for **Stage 3: Background Sync Architecture**
+Tasks for **Stage 3: Background Sync to HealthConnect**
 
 ## Firmware Tasks
 
@@ -275,18 +275,22 @@ Tasks for **Stage 3: Background Sync Architecture**
   - Verify both connections work without errors
   - Verify no "GATT connection busy" or conflict errors
 
-### A2. Local Database
+### A2. HealthConnect Setup
 
-- [ ] A2.1 Set up Room database dependency
-- [ ] A2.2 Design session entity schema
-  - Use `start_time` (Long, Unix timestamp) as primary key
-  - Fields: `start_time`, `end_time`, `revolutions`
-  - No `synced` flag needed (tracking done via SharedPreferences)
-- [ ] A2.3 Create DAO for session storage
-  - Insert method with REPLACE strategy (handle duplicates gracefully)
-  - Query methods: getAll(), getSessionsSince(startTime), getTotalCount()
-- [ ] A2.4 Implement database initialization
-- [ ] A2.5 Add migration strategy
+- [ ] A2.1 Add HealthConnect dependency (androidx.health.connect:connect-client)
+- [ ] A2.2 Request HealthConnect permissions
+  - WRITE_EXERCISE permission for ExerciseSessionRecord
+  - READ_EXERCISE permission for querying last synced session
+  - Handle permission request flow in UI
+- [ ] A2.3 Check HealthConnect availability
+  - Verify SDK version (API 28+)
+  - Check if HealthConnect app is installed
+  - Handle gracefully if unavailable
+- [ ] A2.4 Implement helper to query last synced session for a bike
+  - Query HealthConnect for ExerciseSessionRecords (descending order, pageSize=100)
+  - Filter by clientRecordId prefix: `"bike-${bluetoothDevice.address}-"`
+  - Return max startTime (or 0 if none found)
+  - This replaces SharedPreferences for tracking sync state
 
 ### A3. Sync Implementation
 
@@ -296,31 +300,46 @@ Tasks for **Stage 3: Background Sync Architecture**
   - Verify negotiated MTU >= 185 bytes (response ~102 bytes + overhead)
   - If MTU < 185: log error, disconnect, notify user
   - Connection flow: connect → negotiate MTU → sync → disconnect
-- [ ] A3.2 Add SharedPreferences for sync state
-  - Key: `LAST_SYNCED_START_TIME` (Long, default 0)
-  - Store after each successful sync to enable resume
+- [ ] A3.2 Get last synced timestamp from HealthConnect
+  - At sync start, call helper from A2.4 to get lastSyncedStartTime for this bike
+  - Use bluetoothDevice.address as bike identifier
+  - No SharedPreferences needed - HealthConnect is source of truth
 - [ ] A3.3 Create BLE sync service/manager
   - Connect to Bike Tracker Sync Service (UUID 0x0000FF00-...)
   - Reference only Session Data characteristic (0xFF02) - other characteristics removed in F3
 - [ ] A3.4 Implement timestamp-based sync loop
-  - Read `lastSyncedStartTime` from SharedPreferences (default 0)
+  - Get `lastSyncedStartTime` from HealthConnect (via A2.4 helper)
   - Loop:
     - Write `lastSyncedStartTime` as uint32 little-endian (4 bytes) to 0xFF02
     - Read JSON response: `{"session": {...}, "remaining_sessions": N}` or `{"session": null, "remaining_sessions": 0}`
     - If session is null: break (sync complete)
-    - Store session in local database
+    - Convert session to HealthConnect ExerciseSessionRecord with bike ID
+    - Write session to HealthConnect immediately
     - Update `lastSyncedStartTime = session.start_time`
     - Optional: Update UI with progress using `remaining_sessions` count
-  - After loop completes: persist final `lastSyncedStartTime` to SharedPreferences
-- [ ] A3.5 Parse and store sessions in local database
+  - No need to persist lastSyncedStartTime - HealthConnect is source of truth
+- [ ] A3.5 Convert and write sessions to HealthConnect with bike identifier
   - JSON schema: `{"start_time": 1728849600, "end_time": 1728851400, "revolutions": 456}`
-  - Insert into Room database using `start_time` as primary key
-  - Handle duplicates gracefully (REPLACE strategy in DAO)
+  - Get bike ID from bluetoothDevice.address (e.g., "AA:BB:CC:DD:EE:FF")
+  - Create ExerciseSessionRecord with:
+    - exerciseType: EXERCISE_TYPE_CYCLING
+    - startTime: Instant.ofEpochSecond(session.start_time)
+    - endTime: Instant.ofEpochSecond(session.end_time)
+    - title: "Stationary Bike" (optional)
+    - metadata: Metadata.autoRecorded(
+        clientRecordId: "bike-${bikeId}-${session.start_time}"
+        device: Device(type = Device.TYPE_UNKNOWN)
+      )
+  - Use HealthConnectClient.insertRecords() to write
+  - clientRecordId ensures uniqueness and enables per-bike last sync queries
+  - Handle duplicates gracefully (HealthConnect deduplicates automatically)
 - [ ] A3.6 Handle sync errors and retries gracefully
-  - Connection drops: save partial progress (`lastSyncedStartTime`), retry later
+  - Connection drops: partial progress auto-saved in HealthConnect, next sync resumes from last written session
   - Parse errors: log and skip session, continue loop
   - MTU negotiation failure: abort sync, notify user
+  - HealthConnect write errors: log error, continue to next session (can retry failed sessions on next sync)
   - Timeout handling: disconnect after 30 seconds max
+  - Note: No manual state tracking needed - HealthConnect query determines resume point
 
 ### A4. UI Updates
 
@@ -330,8 +349,9 @@ Tasks for **Stage 3: Background Sync Architecture**
 - [ ] A4.2 Display sync status (syncing/idle/error)
   - During sync: show progress (e.g., "Syncing... 3 sessions remaining")
   - Use `remaining_sessions` count from protocol
-- [ ] A4.3 Show count of stored sessions
-  - Query total count from Room database
+- [ ] A4.3 Show count of stored sessions (optional)
+  - Query HealthConnect for total cycling session count
+  - Note: May be slower than Room query, make optional/cached
 - [ ] A4.4 Add manual sync trigger button
   - Trigger immediate sync (bypass WorkManager schedule)
   - Disable during active sync to prevent conflicts
