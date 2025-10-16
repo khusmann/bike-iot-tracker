@@ -189,55 +189,6 @@ Tasks for **Stage 3: Background Sync Architecture**
   - Test with multiple "clients" (run twice, verify both can sync same sessions)
   - Test progress indication (verify remaining_sessions decrements correctly)
 
-#### Android App Changes
-
-- [ ] F3.6 Update sync protocol (BleManager or new SyncManager)
-  - **MTU Negotiation (CRITICAL):**
-    - Call `gatt.requestMtu(512)` in `onConnectionStateChange` when connected
-    - Wait for `onMtuChanged()` callback before starting sync
-    - Verify MTU >= 185 bytes (response size ~102 bytes + overhead)
-    - Log warning/error if MTU negotiation fails
-  - Add SharedPreferences key: `LAST_SYNCED_START_TIME` (Long, default 0)
-  - Implement sync loop:
-    ```kotlin
-    var lastSynced = prefs.getLong("LAST_SYNCED_START_TIME", 0L)
-
-    while (true) {
-        // Write lastSyncedStartTime as uint32 little-endian
-        characteristic.write(lastSynced.toUInt32LE())
-
-        // Read response
-        val response = characteristic.read().parseJson()
-        // {"session": {...}, "remaining_sessions": N} or {"session": null, "remaining_sessions": 0}
-
-        if (response.session == null) {
-            break  // No more sessions
-        }
-
-        // Optional: Update UI with progress
-        Log.d("Sync", "Remaining: ${response.remaining_sessions}")
-
-        // Store session in local database
-        database.insert(response.session)
-
-        // Update pointer for next request
-        lastSynced = response.session.start_time
-    }
-
-    // Persist final sync state
-    prefs.edit().putLong("LAST_SYNCED_START_TIME", lastSynced).apply()
-    ```
-  - Handle errors gracefully:
-    - Connection drops: save partial progress (lastSynced), retry later
-    - Parse errors: log and skip session
-    - MTU too small: disconnect and warn user
-- [ ] F3.7 Update local database schema (if started)
-  - Change session primary key from auto-increment to `start_time` (Long)
-  - Remove any `synced` tracking if present
-  - Add migration if database already exists
-- [ ] F3.8 Update Models.kt (if session model exists)
-  - Change session ID type from Int/auto to Long (Unix timestamp)
-  - Remove any `synced` field if present
 
 ### F4. Integration & Testing
 
@@ -270,12 +221,59 @@ Tasks for **Stage 3: Background Sync Architecture**
 
 ### A1. Background Sync Infrastructure
 
-- [ ] A1.1 Remove foreground connection requirement from UI
-- [ ] A1.2 Set up WorkManager dependency
-- [ ] A1.3 Create periodic background sync worker (e.g., hourly)
-- [ ] A1.4 Implement low-power BLE scanning (SCAN_MODE_LOW_POWER)
-- [ ] A1.5 Add device name and service UUID filters for scanning
-- [ ] A1.6 Ensure connection duration under 30 seconds per sync
+- [x] A1.1 Set up WorkManager dependency
+- [x] A1.2 Create periodic background sync worker (e.g., hourly)
+- [x] A1.3 Implement low-power BLE scanning for background sync (SCAN_MODE_LOW_POWER)
+- [x] A1.4 Add device name and service UUID filters for scanning
+- [x] A1.5 Ensure background sync connection duration under 30 seconds
+- [x] A1.6 Keep existing foreground connection for live RPM display (CSC Service 0x1816)
+
+#### A1 Testing
+
+**Verification Tools:**
+- Primary: `adb logcat` with TAG filters (e.g., `adb logcat BikeSync:V *:S`)
+- Secondary: Add log statements to worker with clear TAG (e.g., "BikeSync")
+- Optional: Show notification during background sync (can be silent/low-priority)
+- Optional: Write sync status to SharedPreferences and display in UI
+
+- [ ] A1.T1 Test WorkManager triggers background worker correctly
+  - Add log in worker's `doWork()`: "Background sync worker started"
+  - Use `adb logcat BikeSync:V *:S` to monitor logs
+  - For faster testing: use `WorkManager.enqueueUniquePeriodicWork()` with 15-minute interval
+  - Or trigger manually: `adb shell am broadcast -a <your.package.TEST_SYNC_ACTION>` (add test broadcast receiver)
+  - Verify log appears on schedule
+- [ ] A1.T2 Test low-power BLE scanning finds bike
+  - Add logs: "BLE scan started", "Device discovered: [name]", "BLE scan stopped"
+  - Run `adb logcat BikeSync:V BluetoothAdapter:V *:S` to see both app and system BLE logs
+  - Verify correct device name appears in logs
+  - Measure time between "scan started" and "device discovered"
+- [ ] A1.T3 Test background connection lifecycle
+  - Add logs: "Connecting to bike...", "Connected successfully", "Disconnecting", "Disconnected"
+  - Add timestamp logs to measure duration
+  - Run `adb logcat BikeSync:V *:S` while worker runs
+  - Verify connection sequence completes within 30 seconds
+  - Check for error logs (connection timeouts, GATT errors)
+- [ ] A1.T4 Test app is killed/closed scenarios
+  - Add notification (silent, low priority) that shows "Background sync in progress" during worker execution
+  - Close app via recent apps (swipe away)
+  - Monitor via: `adb logcat BikeSync:V WorkManager:V *:S`
+  - Watch for "Background sync worker started" log after scheduled time
+  - Verify notification appears (proves worker is running)
+- [ ] A1.T5 Test device reboot
+  - Add persistent notification counter in SharedPreferences: increment each sync
+  - Note current counter value before reboot
+  - Reboot phone
+  - After boot + scheduled interval, run `adb logcat BikeSync:V *:S`
+  - Verify "Background sync worker started" appears
+  - Check counter incremented (proves sync actually ran)
+- [ ] A1.T6 Verify foreground connection still works
+  - Add log in foreground connection: "Foreground CSC connection started"
+  - Add log in background worker: "Background sync connection started"
+  - Open app (triggers foreground connection)
+  - Manually trigger background sync via test broadcast
+  - Run `adb logcat BikeSync:V *:S`
+  - Verify both connections work without errors
+  - Verify no "GATT connection busy" or conflict errors
 
 ### A2. Local Database
 

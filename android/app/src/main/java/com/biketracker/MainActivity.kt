@@ -35,6 +35,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Schedule background sync (KEEP policy means won't reschedule if already scheduled)
+        SyncScheduler.schedulePeriodicSync(applicationContext)
+
         setContent {
             BikeTrackerTheme {
                 Surface(
