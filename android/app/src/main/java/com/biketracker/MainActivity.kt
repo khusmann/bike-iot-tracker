@@ -1,10 +1,15 @@
 package com.biketracker
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,13 +24,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
+import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.lifecycle.lifecycleScope
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -35,13 +49,49 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Schedule background sync (KEEP policy means won't reschedule if already scheduled)
+        SyncScheduler.schedulePeriodicSync(applicationContext)
+
         setContent {
             BikeTrackerTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    // HealthConnect permission setup
+                    val healthConnectPermissions = setOf(
+                        HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+                        HealthPermission.getWritePermission(ExerciseSessionRecord::class)
+                    )
+
+                    // Check if HealthConnect is available
+                    val healthConnectAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                            HealthConnectClient.getSdkStatus(applicationContext) == HealthConnectClient.SDK_AVAILABLE
+
+                    // Track permission state
+                    var healthConnectPermissionsGranted by remember { mutableStateOf(false) }
+
+                    // Check current permission status on composition and after returning from settings
+                    androidx.compose.runtime.LaunchedEffect(healthConnectAvailable) {
+                        if (healthConnectAvailable) {
+                            val healthConnectClient = HealthConnectClient.getOrCreate(applicationContext)
+                            val granted = healthConnectClient.permissionController.getGrantedPermissions()
+                            healthConnectPermissionsGranted = granted.containsAll(healthConnectPermissions)
+                            Log.i("MainActivity", "Current HC permissions granted: $granted")
+                        }
+                    }
+
+                    // HealthConnect permission launcher
+                    val healthConnectPermissionsLauncher = rememberLauncherForActivityResult(
+                        contract = PermissionController.createRequestPermissionResultContract()
+                    ) { granted ->
+                        Log.i("MainActivity", "HealthConnect permission result: $granted")
+                        healthConnectPermissionsGranted = granted.containsAll(healthConnectPermissions)
+                        Log.i("MainActivity", "All HC permissions granted: $healthConnectPermissionsGranted")
+                    }
+
+                    // Bluetooth permissions (standard Android)
+                    val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         listOf(
                             Manifest.permission.BLUETOOTH_SCAN,
                             Manifest.permission.BLUETOOTH_CONNECT
@@ -50,13 +100,28 @@ class MainActivity : ComponentActivity() {
                         emptyList()
                     }
 
-                    val permissionsState = rememberMultiplePermissionsState(permissions)
+                    val bluetoothPermissionsState = rememberMultiplePermissionsState(bluetoothPermissions)
 
-                    if (permissions.isEmpty() || permissionsState.allPermissionsGranted) {
+                    // Check if all permissions are granted
+                    val allPermissionsGranted = (bluetoothPermissions.isEmpty() || bluetoothPermissionsState.allPermissionsGranted) &&
+                            (!healthConnectAvailable || healthConnectPermissionsGranted)
+
+                    if (allPermissionsGranted) {
                         BikeTrackerScreen(viewModel)
                     } else {
                         PermissionScreen(
-                            onRequestPermissions = { permissionsState.launchMultiplePermissionRequest() }
+                            bluetoothGranted = bluetoothPermissions.isEmpty() || bluetoothPermissionsState.allPermissionsGranted,
+                            healthConnectGranted = !healthConnectAvailable || healthConnectPermissionsGranted,
+                            healthConnectAvailable = healthConnectAvailable,
+                            onRequestBluetoothPermissions = {
+                                Log.i("MainActivity", "Requesting Bluetooth permissions")
+                                bluetoothPermissionsState.launchMultiplePermissionRequest()
+                            },
+                            onRequestHealthConnectPermissions = {
+                                Log.i("MainActivity", "Requesting HealthConnect permissions")
+                                Log.i("MainActivity", "Permissions to request: $healthConnectPermissions")
+                                healthConnectPermissionsLauncher.launch(healthConnectPermissions)
+                            }
                         )
                     }
                 }
@@ -74,7 +139,13 @@ fun BikeTrackerTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun PermissionScreen(onRequestPermissions: () -> Unit) {
+fun PermissionScreen(
+    bluetoothGranted: Boolean,
+    healthConnectGranted: Boolean,
+    healthConnectAvailable: Boolean,
+    onRequestBluetoothPermissions: () -> Unit,
+    onRequestHealthConnectPermissions: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -83,17 +154,53 @@ fun PermissionScreen(onRequestPermissions: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Bluetooth permissions required",
+            text = "Permissions Required",
             style = MaterialTheme.typography.headlineSmall
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "This app needs Bluetooth permissions to connect to your bike tracker.",
+            text = "This app needs permissions to function properly:",
             style = MaterialTheme.typography.bodyMedium
         )
+
         Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onRequestPermissions) {
-            Text("Grant Permissions")
+
+        // Bluetooth permissions section
+        if (!bluetoothGranted) {
+            Text(
+                text = "• Bluetooth: Connect to your bike tracker",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(onClick = onRequestBluetoothPermissions) {
+                Text("Grant Bluetooth Permissions")
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        } else {
+            Text(
+                text = "✓ Bluetooth permissions granted",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // HealthConnect permissions section
+        if (healthConnectAvailable && !healthConnectGranted) {
+            Text(
+                text = "• HealthConnect: Save your workout data",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(onClick = onRequestHealthConnectPermissions) {
+                Text("Grant HealthConnect Permissions")
+            }
+        } else if (healthConnectGranted) {
+            Text(
+                text = "✓ HealthConnect permissions granted",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
@@ -130,7 +237,32 @@ fun BikeTrackerScreen(viewModel: BikeViewModel) {
             unit = ""
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // HealthConnect status
+        Text(
+            text = "HealthConnect: ${if (state.healthConnectAvailable) "Available" else "Not Available"}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (state.healthConnectAvailable)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.error
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Test button for querying last synced timestamp
+        if (state.healthConnectAvailable) {
+            Button(onClick = {
+                // Test with a dummy bike address
+                Log.i("MainActivity", "Test button clicked - querying last synced timestamp")
+                viewModel.testQueryLastSyncedTimestamp("AA:BB:CC:DD:EE:FF")
+            }) {
+                Text("Test HealthConnect Query")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Connect/Disconnect button
         when (state.connectionState) {

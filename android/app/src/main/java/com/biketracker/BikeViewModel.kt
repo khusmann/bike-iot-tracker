@@ -23,12 +23,20 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private val bleManager = BleManager(application)
+    private val healthConnectHelper = HealthConnectHelper(application)
 
     private val _state = MutableStateFlow(BikeState())
     val state: StateFlow<BikeState> = _state.asStateFlow()
 
     private var previousMeasurement: CscMeasurement? = null
     private var cadenceTimeoutJob: Job? = null
+
+    init {
+        // Check HealthConnect availability on initialization
+        val isHealthConnectAvailable = healthConnectHelper.isAvailable()
+        _state.value = _state.value.copy(healthConnectAvailable = isHealthConnectAvailable)
+        Log.i(TAG, "HealthConnect available: $isHealthConnectAvailable")
+    }
 
     /**
      * Starts BLE connection and begins receiving measurements
@@ -108,6 +116,18 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
         cadenceTimeoutJob = null
         _state.value = BikeState()
         previousMeasurement = null
+    }
+
+    /**
+     * Test function: Query last synced timestamp for a given bike address
+     * This is useful for testing the HealthConnect integration
+     */
+    fun testQueryLastSyncedTimestamp(bikeAddress: String) {
+        viewModelScope.launch {
+            val timestamp = healthConnectHelper.getLastSyncedTimestamp(bikeAddress)
+            Log.i(TAG, "Last synced timestamp for bike $bikeAddress: $timestamp")
+            // Could update state here to show in UI if desired
+        }
     }
 
     override fun onCleared() {

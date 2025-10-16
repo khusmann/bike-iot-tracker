@@ -1,6 +1,6 @@
 # Tasks
 
-Tasks for **Stage 3: Background Sync Architecture**
+Tasks for **Stage 3: Background Sync to HealthConnect**
 
 ## Firmware Tasks
 
@@ -189,55 +189,6 @@ Tasks for **Stage 3: Background Sync Architecture**
   - Test with multiple "clients" (run twice, verify both can sync same sessions)
   - Test progress indication (verify remaining_sessions decrements correctly)
 
-#### Android App Changes
-
-- [ ] F3.6 Update sync protocol (BleManager or new SyncManager)
-  - **MTU Negotiation (CRITICAL):**
-    - Call `gatt.requestMtu(512)` in `onConnectionStateChange` when connected
-    - Wait for `onMtuChanged()` callback before starting sync
-    - Verify MTU >= 185 bytes (response size ~102 bytes + overhead)
-    - Log warning/error if MTU negotiation fails
-  - Add SharedPreferences key: `LAST_SYNCED_START_TIME` (Long, default 0)
-  - Implement sync loop:
-    ```kotlin
-    var lastSynced = prefs.getLong("LAST_SYNCED_START_TIME", 0L)
-
-    while (true) {
-        // Write lastSyncedStartTime as uint32 little-endian
-        characteristic.write(lastSynced.toUInt32LE())
-
-        // Read response
-        val response = characteristic.read().parseJson()
-        // {"session": {...}, "remaining_sessions": N} or {"session": null, "remaining_sessions": 0}
-
-        if (response.session == null) {
-            break  // No more sessions
-        }
-
-        // Optional: Update UI with progress
-        Log.d("Sync", "Remaining: ${response.remaining_sessions}")
-
-        // Store session in local database
-        database.insert(response.session)
-
-        // Update pointer for next request
-        lastSynced = response.session.start_time
-    }
-
-    // Persist final sync state
-    prefs.edit().putLong("LAST_SYNCED_START_TIME", lastSynced).apply()
-    ```
-  - Handle errors gracefully:
-    - Connection drops: save partial progress (lastSynced), retry later
-    - Parse errors: log and skip session
-    - MTU too small: disconnect and warn user
-- [ ] F3.7 Update local database schema (if started)
-  - Change session primary key from auto-increment to `start_time` (Long)
-  - Remove any `synced` tracking if present
-  - Add migration if database already exists
-- [ ] F3.8 Update Models.kt (if session model exists)
-  - Change session ID type from Int/auto to Long (Unix timestamp)
-  - Remove any `synced` field if present
 
 ### F4. Integration & Testing
 
@@ -270,38 +221,143 @@ Tasks for **Stage 3: Background Sync Architecture**
 
 ### A1. Background Sync Infrastructure
 
-- [ ] A1.1 Remove foreground connection requirement from UI
-- [ ] A1.2 Set up WorkManager dependency
-- [ ] A1.3 Create periodic background sync worker (e.g., hourly)
-- [ ] A1.4 Implement low-power BLE scanning (SCAN_MODE_LOW_POWER)
-- [ ] A1.5 Add device name and service UUID filters for scanning
-- [ ] A1.6 Ensure connection duration under 30 seconds per sync
+- [x] A1.1 Set up WorkManager dependency
+- [x] A1.2 Create periodic background sync worker (e.g., hourly)
+- [x] A1.3 Implement low-power BLE scanning for background sync (SCAN_MODE_LOW_POWER)
+- [x] A1.4 Add device name and service UUID filters for scanning
+- [x] A1.5 Ensure background sync connection duration under 30 seconds
+- [x] A1.6 Keep existing foreground connection for live RPM display (CSC Service 0x1816)
 
-### A2. Local Database
+#### A1 Testing
 
-- [ ] A2.1 Set up Room database dependency
-- [ ] A2.2 Design session entity schema
-- [ ] A2.3 Create DAO for session storage
-- [ ] A2.4 Implement database initialization
-- [ ] A2.5 Add migration strategy
+**Verification Tools:**
+- Primary: `adb logcat` with TAG filters (e.g., `adb logcat BikeSync:V *:S`)
+- Secondary: Add log statements to worker with clear TAG (e.g., "BikeSync")
+- Optional: Show notification during background sync (can be silent/low-priority)
+- Optional: Write sync status to SharedPreferences and display in UI
+
+- [ ] A1.T1 Test WorkManager triggers background worker correctly
+  - Add log in worker's `doWork()`: "Background sync worker started"
+  - Use `adb logcat BikeSync:V *:S` to monitor logs
+  - For faster testing: use `WorkManager.enqueueUniquePeriodicWork()` with 15-minute interval
+  - Or trigger manually: `adb shell am broadcast -a <your.package.TEST_SYNC_ACTION>` (add test broadcast receiver)
+  - Verify log appears on schedule
+- [ ] A1.T2 Test low-power BLE scanning finds bike
+  - Add logs: "BLE scan started", "Device discovered: [name]", "BLE scan stopped"
+  - Run `adb logcat BikeSync:V BluetoothAdapter:V *:S` to see both app and system BLE logs
+  - Verify correct device name appears in logs
+  - Measure time between "scan started" and "device discovered"
+- [ ] A1.T3 Test background connection lifecycle
+  - Add logs: "Connecting to bike...", "Connected successfully", "Disconnecting", "Disconnected"
+  - Add timestamp logs to measure duration
+  - Run `adb logcat BikeSync:V *:S` while worker runs
+  - Verify connection sequence completes within 30 seconds
+  - Check for error logs (connection timeouts, GATT errors)
+- [ ] A1.T4 Test app is killed/closed scenarios
+  - Add notification (silent, low priority) that shows "Background sync in progress" during worker execution
+  - Close app via recent apps (swipe away)
+  - Monitor via: `adb logcat BikeSync:V WorkManager:V *:S`
+  - Watch for "Background sync worker started" log after scheduled time
+  - Verify notification appears (proves worker is running)
+- [ ] A1.T5 Test device reboot
+  - Add persistent notification counter in SharedPreferences: increment each sync
+  - Note current counter value before reboot
+  - Reboot phone
+  - After boot + scheduled interval, run `adb logcat BikeSync:V *:S`
+  - Verify "Background sync worker started" appears
+  - Check counter incremented (proves sync actually ran)
+- [ ] A1.T6 Verify foreground connection still works
+  - Add log in foreground connection: "Foreground CSC connection started"
+  - Add log in background worker: "Background sync connection started"
+  - Open app (triggers foreground connection)
+  - Manually trigger background sync via test broadcast
+  - Run `adb logcat BikeSync:V *:S`
+  - Verify both connections work without errors
+  - Verify no "GATT connection busy" or conflict errors
+
+### A2. HealthConnect Setup
+
+- [x] A2.1 Add HealthConnect dependency (androidx.health.connect:connect-client)
+- [x] A2.2 Request HealthConnect permissions
+  - WRITE_EXERCISE permission for ExerciseSessionRecord
+  - READ_EXERCISE permission for querying last synced session
+  - Handle permission request flow in UI
+- [x] A2.3 Check HealthConnect availability
+  - Verify SDK version (API 28+)
+  - Check if HealthConnect app is installed
+  - Handle gracefully if unavailable
+- [x] A2.4 Implement helper to query last synced session for a bike
+  - Query HealthConnect for ExerciseSessionRecords (descending order, pageSize=100)
+  - Filter by clientRecordId prefix: `"bike-${bluetoothDevice.address}-"`
+  - Return max startTime (or 0 if none found)
+  - This replaces SharedPreferences for tracking sync state
 
 ### A3. Sync Implementation
 
-- [ ] A3.1 Create BLE sync service/manager
-- [ ] A3.2 Implement session range read from ESP32
-- [ ] A3.3 Implement session data transfer (request + receive)
-- [ ] A3.4 Parse and store sessions in local database
-- [ ] A3.5 Send "mark as synced" confirmation to ESP32
+- [ ] A3.1 **CRITICAL: MTU Negotiation**
+  - Call `gatt.requestMtu(512)` immediately after connection established
+  - Wait for `onMtuChanged()` callback before starting sync
+  - Verify negotiated MTU >= 185 bytes (response ~102 bytes + overhead)
+  - If MTU < 185: log error, disconnect, notify user
+  - Connection flow: connect → negotiate MTU → sync → disconnect
+- [ ] A3.2 Get last synced timestamp from HealthConnect
+  - At sync start, call helper from A2.4 to get lastSyncedStartTime for this bike
+  - Use bluetoothDevice.address as bike identifier
+  - No SharedPreferences needed - HealthConnect is source of truth
+- [ ] A3.3 Create BLE sync service/manager
+  - Connect to Bike Tracker Sync Service (UUID 0x0000FF00-...)
+  - Reference only Session Data characteristic (0xFF02) - other characteristics removed in F3
+- [ ] A3.4 Implement timestamp-based sync loop
+  - Get `lastSyncedStartTime` from HealthConnect (via A2.4 helper)
+  - Loop:
+    - Write `lastSyncedStartTime` as uint32 little-endian (4 bytes) to 0xFF02
+    - Read JSON response: `{"session": {...}, "remaining_sessions": N}` or `{"session": null, "remaining_sessions": 0}`
+    - If session is null: break (sync complete)
+    - Convert session to HealthConnect ExerciseSessionRecord with bike ID
+    - Write session to HealthConnect immediately
+    - Update `lastSyncedStartTime = session.start_time`
+    - Optional: Update UI with progress using `remaining_sessions` count
+  - No need to persist lastSyncedStartTime - HealthConnect is source of truth
+- [ ] A3.5 Convert and write sessions to HealthConnect with bike identifier
+  - JSON schema: `{"start_time": 1728849600, "end_time": 1728851400, "revolutions": 456}`
+  - Get bike ID from bluetoothDevice.address (e.g., "AA:BB:CC:DD:EE:FF")
+  - Create ExerciseSessionRecord with:
+    - exerciseType: EXERCISE_TYPE_CYCLING
+    - startTime: Instant.ofEpochSecond(session.start_time)
+    - endTime: Instant.ofEpochSecond(session.end_time)
+    - title: "Stationary Bike" (optional)
+    - metadata: Metadata.autoRecorded(
+        clientRecordId: "bike-${bikeId}-${session.start_time}"
+        device: Device(type = Device.TYPE_UNKNOWN)
+      )
+  - Use HealthConnectClient.insertRecords() to write
+  - clientRecordId ensures uniqueness and enables per-bike last sync queries
+  - Handle duplicates gracefully (HealthConnect deduplicates automatically)
 - [ ] A3.6 Handle sync errors and retries gracefully
-- [ ] A3.7 Negotiate higher MTU on connection (request 512 bytes)
+  - Connection drops: partial progress auto-saved in HealthConnect, next sync resumes from last written session
+  - Parse errors: log and skip session, continue loop
+  - MTU negotiation failure: abort sync, notify user
+  - HealthConnect write errors: log error, continue to next session (can retry failed sessions on next sync)
+  - Timeout handling: disconnect after 30 seconds max
+  - Note: No manual state tracking needed - HealthConnect query determines resume point
 
 ### A4. UI Updates
 
 - [ ] A4.1 Show last sync time in UI
+  - Display timestamp of last successful sync completion
+  - Show "Never synced" if no sync has occurred
 - [ ] A4.2 Display sync status (syncing/idle/error)
-- [ ] A4.3 Show count of stored sessions
+  - During sync: show progress (e.g., "Syncing... 3 sessions remaining")
+  - Use `remaining_sessions` count from protocol
+- [ ] A4.3 Show count of stored sessions (optional)
+  - Query HealthConnect for total cycling session count
+  - Note: May be slower than Room query, make optional/cached
 - [ ] A4.4 Add manual sync trigger button
+  - Trigger immediate sync (bypass WorkManager schedule)
+  - Disable during active sync to prevent conflicts
 - [ ] A4.5 Update UI to work without persistent connection
+  - Remove connection status indicators (no persistent connection)
+  - Show last sync status instead
 
 ### A5. Battery Optimization
 
