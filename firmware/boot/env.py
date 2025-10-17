@@ -17,7 +17,7 @@ def load_dotenv(filepath: str = "device.env"):
     return env
 
 
-class Config:
+class Env:
     wifi_ssid: str
     wifi_password: str
 

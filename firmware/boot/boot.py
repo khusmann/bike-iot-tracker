@@ -1,6 +1,6 @@
 import os
 import network
-from config import load_dotenv
+from env import load_dotenv
 
 # Turn on interface
 wlan = network.WLAN(network.STA_IF)
