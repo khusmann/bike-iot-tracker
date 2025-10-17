@@ -208,6 +208,7 @@ fun PermissionScreen(
 @Composable
 fun BikeTrackerScreen(viewModel: BikeViewModel) {
     val state by viewModel.state.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Column(
         modifier = Modifier
@@ -250,6 +251,16 @@ fun BikeTrackerScreen(viewModel: BikeViewModel) {
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // Manual sync button
+        Button(onClick = {
+            Log.i("MainActivity", "Manual sync button clicked")
+            SyncScheduler.triggerImmediateSync(context)
+        }) {
+            Text("Sync Now")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Test button for querying last synced timestamp
         if (state.healthConnectAvailable) {

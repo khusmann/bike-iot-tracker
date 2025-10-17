@@ -2,7 +2,12 @@ package com.biketracker
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
@@ -10,6 +15,11 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.ParcelUuid
 import android.util.Log
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.CoroutineScope
@@ -18,8 +28,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.time.Instant
+import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Background worker for syncing bike tracker data
@@ -50,7 +66,8 @@ class BackgroundSyncWorker(
         // CSC Service UUID (for scanning compatibility)
         private val CSC_SERVICE_UUID = UUID.fromString("00001816-0000-1000-8000-00805f9b34fb")
 
-        private const val DEVICE_NAME_PREFIX = "BikeTracker"
+        // Accept both "BikeTracker" (firmware running) and "MPY ESP32" (firmware not started yet)
+        private val ACCEPTED_DEVICE_NAMES = setOf("BikeTracker", "MPY ESP32")
 
         // Timeouts
         private const val SCAN_TIMEOUT_MS = 10_000L
@@ -90,6 +107,7 @@ class BackgroundSyncWorker(
      * Performs the full sync operation
      * @return true if successful, false if should retry
      */
+    @SuppressLint("MissingPermission")
     private suspend fun performSync(): Boolean {
         val device = scanForDevice() ?: run {
             Log.w(TAG, "BLE scan did not find bike tracker")
@@ -98,11 +116,286 @@ class BackgroundSyncWorker(
 
         Log.d(TAG, "Found bike tracker: ${device.device.name}")
 
-        // TODO: Connect to device and sync data
-        // This will be implemented in A3 when we add the sync protocol
-        // For now, we just verify scanning works
+        // Get last synced timestamp from HealthConnect
+        val healthConnect = HealthConnectHelper(applicationContext)
+        val lastSyncedTimestamp = healthConnect.getLastSyncedTimestamp(device.device.address)
+        Log.d(TAG, "Last synced timestamp: $lastSyncedTimestamp")
 
-        return true
+        // Connect to device and sync
+        var gatt: BluetoothGatt? = null
+        try {
+            val syncResult = suspendCancellableCoroutine<Boolean> { continuation ->
+                var resumed = false
+
+                gatt = device.device.connectGatt(
+                    applicationContext,
+                    false,
+                    object : BluetoothGattCallback() {
+                        private var mtuNegotiated = false
+                        private var servicesDiscovered = false
+                        private var sessionDataChar: BluetoothGattCharacteristic? = null
+                        private var currentOperation: SyncOperation? = null
+                        private var currentLastSyncedTimestamp = lastSyncedTimestamp
+
+                        override fun onConnectionStateChange(
+                            gatt: BluetoothGatt,
+                            status: Int,
+                            newState: Int
+                        ) {
+                            when (newState) {
+                                BluetoothProfile.STATE_CONNECTED -> {
+                                    Log.d(TAG, "Connected to GATT server")
+                                    // A3.1: Request MTU negotiation
+                                    val mtuRequested = gatt.requestMtu(512)
+                                    if (!mtuRequested) {
+                                        Log.e(TAG, "Failed to request MTU")
+                                        resumeOnce(continuation, false)
+                                    }
+                                }
+                                BluetoothProfile.STATE_DISCONNECTED -> {
+                                    Log.d(TAG, "Disconnected from GATT server")
+                                    gatt.close()
+                                    // Only resume if we haven't already
+                                    if (!resumed) {
+                                        resumed = true
+                                        continuation.resume(false)
+                                    }
+                                }
+                            }
+                        }
+
+                        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+                            if (status == BluetoothGatt.GATT_SUCCESS) {
+                                Log.d(TAG, "MTU changed to: $mtu")
+
+                                // A3.1: Verify MTU is sufficient (>= 185 bytes)
+                                if (mtu < 185) {
+                                    Log.e(TAG, "MTU too small: $mtu < 185, aborting sync")
+                                    gatt.disconnect()
+                                    resumeOnce(continuation, false)
+                                    return
+                                }
+
+                                mtuNegotiated = true
+
+                                // Start service discovery
+                                Log.d(TAG, "Discovering services...")
+                                val discovered = gatt.discoverServices()
+                                if (!discovered) {
+                                    Log.e(TAG, "Failed to start service discovery")
+                                    gatt.disconnect()
+                                    resumeOnce(continuation, false)
+                                }
+                            } else {
+                                Log.e(TAG, "MTU change failed with status: $status")
+                                gatt.disconnect()
+                                resumeOnce(continuation, false)
+                            }
+                        }
+
+                        override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+                            if (status == BluetoothGatt.GATT_SUCCESS) {
+                                Log.d(TAG, "Services discovered")
+
+                                // A3.3: Find sync service and session data characteristic
+                                val syncService = gatt.getService(SYNC_SERVICE_UUID)
+                                if (syncService == null) {
+                                    Log.e(TAG, "Sync service not found")
+                                    gatt.disconnect()
+                                    resumeOnce(continuation, false)
+                                    return
+                                }
+
+                                // UUID 0xFF01 as defined in firmware/src/sync_service.py
+                                val sessionDataUuid = UUID.fromString("0000FF01-0000-1000-8000-00805f9b34fb")
+                                sessionDataChar = syncService.getCharacteristic(sessionDataUuid)
+
+                                if (sessionDataChar == null) {
+                                    Log.e(TAG, "Session data characteristic not found")
+                                    gatt.disconnect()
+                                    resumeOnce(continuation, false)
+                                    return
+                                }
+
+                                servicesDiscovered = true
+
+                                // A3.4: Start sync loop
+                                requestNextSession(gatt, sessionDataChar!!)
+                            } else {
+                                Log.e(TAG, "Service discovery failed with status: $status")
+                                gatt.disconnect()
+                                resumeOnce(continuation, false)
+                            }
+                        }
+
+                        override fun onCharacteristicWrite(
+                            gatt: BluetoothGatt,
+                            characteristic: BluetoothGattCharacteristic,
+                            status: Int
+                        ) {
+                            if (status != BluetoothGatt.GATT_SUCCESS) {
+                                Log.e(TAG, "Characteristic write failed with status: $status")
+                                gatt.disconnect()
+                                resumeOnce(continuation, false)
+                                return
+                            }
+
+                            // After write succeeds, read the response
+                            val readSuccess = gatt.readCharacteristic(characteristic)
+                            if (!readSuccess) {
+                                Log.e(TAG, "Failed to initiate characteristic read")
+                                gatt.disconnect()
+                                resumeOnce(continuation, false)
+                            }
+                        }
+
+                        override fun onCharacteristicRead(
+                            gatt: BluetoothGatt,
+                            characteristic: BluetoothGattCharacteristic,
+                            value: ByteArray,
+                            status: Int
+                        ) {
+                            if (status != BluetoothGatt.GATT_SUCCESS) {
+                                Log.e(TAG, "Characteristic read failed with status: $status")
+                                gatt.disconnect()
+                                resumeOnce(continuation, false)
+                                return
+                            }
+
+                            try {
+                                // Parse JSON response
+                                val jsonStr = String(value)
+                                Log.d(TAG, "Received response: $jsonStr")
+
+                                val jsonObj = JSONObject(jsonStr)
+                                val sessionJson = jsonObj.optJSONObject("session")
+                                val remainingSessions = jsonObj.getInt("remaining_sessions")
+
+                                if (sessionJson == null) {
+                                    // A3.4: No more sessions, sync complete
+                                    Log.d(TAG, "Sync complete - no more sessions")
+                                    gatt.disconnect()
+                                    resumeOnce(continuation, true)
+                                    return
+                                }
+
+                                // A3.5: Convert session to HealthConnect format and write
+                                val startTime = sessionJson.getLong("start_time")
+                                val endTime = sessionJson.getLong("end_time")
+                                val revolutions = sessionJson.getInt("revolutions")
+
+                                Log.d(TAG, "Session: start=$startTime, end=$endTime, revolutions=$revolutions, remaining=$remainingSessions")
+
+                                // Write to HealthConnect
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    try {
+                                        writeSessionToHealthConnect(
+                                            device.device.address,
+                                            startTime,
+                                            endTime,
+                                            revolutions
+                                        )
+
+                                        // Update last synced timestamp
+                                        currentLastSyncedTimestamp = startTime
+
+                                        // Request next session
+                                        requestNextSession(gatt, sessionDataChar!!)
+                                    } catch (e: Exception) {
+                                        // A3.6: Handle HealthConnect write errors
+                                        Log.e(TAG, "Error writing session to HealthConnect: ${e.message}", e)
+                                        // Continue to next session despite error
+                                        requestNextSession(gatt, sessionDataChar!!)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                // A3.6: Handle parse errors
+                                Log.e(TAG, "Error parsing session response: ${e.message}", e)
+                                gatt.disconnect()
+                                resumeOnce(continuation, false)
+                            }
+                        }
+
+                        private fun requestNextSession(
+                            gatt: BluetoothGatt,
+                            characteristic: BluetoothGattCharacteristic
+                        ) {
+                            // A3.4: Write lastSyncedTimestamp as uint32 little-endian
+                            val buffer = ByteBuffer.allocate(4)
+                            buffer.order(ByteOrder.LITTLE_ENDIAN)
+                            buffer.putInt(currentLastSyncedTimestamp.toInt())
+
+                            characteristic.value = buffer.array()
+                            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+
+                            val writeSuccess = gatt.writeCharacteristic(characteristic)
+                            if (!writeSuccess) {
+                                Log.e(TAG, "Failed to write characteristic")
+                                gatt.disconnect()
+                                resumeOnce(continuation, false)
+                            }
+                        }
+
+                        private fun resumeOnce(
+                            cont: kotlin.coroutines.Continuation<Boolean>,
+                            value: Boolean
+                        ) {
+                            if (!resumed) {
+                                resumed = true
+                                cont.resume(value)
+                            }
+                        }
+                    },
+                    BluetoothDevice.TRANSPORT_LE
+                )
+            }
+
+            return syncResult
+        } catch (e: Exception) {
+            Log.e(TAG, "Sync error: ${e.message}", e)
+            gatt?.close()
+            return false
+        }
+    }
+
+    /**
+     * A3.5: Write a session to HealthConnect
+     */
+    private suspend fun writeSessionToHealthConnect(
+        bikeAddress: String,
+        startTime: Long,
+        endTime: Long,
+        revolutions: Int
+    ) {
+        val healthConnectClient = HealthConnectClient.getOrCreate(applicationContext)
+
+        val exerciseSession = ExerciseSessionRecord(
+            startTime = Instant.ofEpochSecond(startTime),
+            startZoneOffset = null,
+            endTime = Instant.ofEpochSecond(endTime),
+            endZoneOffset = null,
+            exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY,
+            title = "Stationary Bike",
+            metadata = Metadata(
+                clientRecordId = "bike-$bikeAddress-$startTime"
+            )
+        )
+
+        try {
+            healthConnectClient.insertRecords(listOf(exerciseSession))
+            Log.d(TAG, "Successfully wrote session to HealthConnect: $startTime")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write session to HealthConnect", e)
+            throw e
+        }
+    }
+
+    /**
+     * Internal helper for sync operations
+     */
+    private enum class SyncOperation {
+        REQUESTING_SESSION,
+        READING_SESSION
     }
 
     /**
@@ -131,7 +424,7 @@ class BackgroundSyncWorker(
                 override fun onScanResult(callbackType: Int, result: ScanResult) {
                     Log.d(TAG, "Device discovered: ${result.device.name ?: "unknown"}")
 
-                    if (!resumed && result.device.name?.startsWith(DEVICE_NAME_PREFIX) == true) {
+                    if (!resumed && result.device.name in ACCEPTED_DEVICE_NAMES) {
                         resumed = true
                         scanner.stopScan(this)
                         continuation.resume(result)
