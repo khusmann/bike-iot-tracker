@@ -14,6 +14,9 @@ from utils import log
 # File to save sessions to
 SESSIONS_FILE = "/sessions.json"
 
+# Minimum session duration in seconds (5 minutes)
+SESSION_MIN_DURATION_S = 5 * 60
+
 
 @dataclass
 class TelemetryManager:
@@ -82,8 +85,10 @@ class SessionManager:
         Updates the end_time to now, adds the session to the store,
         and persists to disk.
 
+        Sessions shorter than SESSION_MIN_DURATION_S seconds are discarded and not saved.
+
         Returns:
-            The ended Session, or None if no active session.
+            The ended Session, or None if no active session or session too short.
         """
         if self.current_session is None:
             log("No active session to end")
@@ -91,6 +96,17 @@ class SessionManager:
 
         # Update end time
         self.current_session.end_time = int(time.time())
+
+        # Calculate duration
+        duration_s = self.current_session.end_time - self.current_session.start_time
+
+        # Discard sessions shorter than minimum duration
+        if duration_s < SESSION_MIN_DURATION_S:
+            log(f"Discarded short session {self.current_session.start_time}: "
+                f"{self.current_session.revolutions} revolutions, "
+                f"duration={duration_s}s (< {SESSION_MIN_DURATION_S}s minimum)")
+            self.current_session = None
+            return None
 
         # Add to store
         self.store.sessions.append(self.current_session)
@@ -100,7 +116,7 @@ class SessionManager:
 
         log(f"Ended session {self.current_session.start_time}: "
             f"{self.current_session.revolutions} revolutions, "
-            f"duration={(self.current_session.end_time - self.current_session.start_time)}s")
+            f"duration={duration_s}s")
 
         ended_session = self.current_session
         self.current_session = None
