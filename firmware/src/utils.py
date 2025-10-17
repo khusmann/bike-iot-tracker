@@ -11,6 +11,37 @@ SLOW_BLINK_PATTERN = [0.5, 0.5]  # Simple blink: on 0.5s, off 0.5s
 FAST_BLINK_PATTERN = [0.1, 0.1]  # Quick blip
 DOUBLE_BLINK_PATTERN = [0.1, 0.1, 0.1, 0.7]  # Double-blink with pause
 
+# MicroPython Epoch Constants
+# MicroPython on ESP32 uses epoch 2000-01-01, Unix uses epoch 1970-01-01
+# The difference is exactly 30 years = 946,684,800 seconds
+MICROPYTHON_EPOCH_OFFSET = 946684800
+
+Numeric = t.TypeVar("Numeric", int, float)
+
+
+def micropython_to_unix_timestamp(mp_timestamp: Numeric) -> Numeric:
+    """Convert MicroPython timestamp (epoch 2000) to Unix timestamp (epoch 1970).
+
+    Args:
+        mp_timestamp: Timestamp in seconds since 2000-01-01
+
+    Returns:
+        Timestamp in seconds since 1970-01-01 (standard Unix epoch)
+    """
+    return mp_timestamp + MICROPYTHON_EPOCH_OFFSET
+
+
+def unix_to_micropython_timestamp(unix_timestamp: Numeric) -> Numeric:
+    """Convert Unix timestamp (epoch 1970) to MicroPython timestamp (epoch 2000).
+
+    Args:
+        unix_timestamp: Timestamp in seconds since 1970-01-01 (standard Unix epoch)
+
+    Returns:
+        Timestamp in seconds since 2000-01-01 (MicroPython epoch)
+    """
+    return unix_timestamp - MICROPYTHON_EPOCH_OFFSET if unix_timestamp > 0 else 0
+
 
 def format_time_hms(time_tuple: t.Tuple[int, int, int, int, int, int, int, int]) -> str:
     """Format a time tuple as HH:MM:SS string.

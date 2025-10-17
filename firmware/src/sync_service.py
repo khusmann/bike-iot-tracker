@@ -25,7 +25,7 @@ import bluetooth
 
 from models import Session
 from state import SessionManager
-from utils import log
+from utils import log, unix_to_micropython_timestamp, micropython_to_unix_timestamp
 
 
 # Sync Service UUID
@@ -78,11 +78,15 @@ def register_sync_service(session_manager: SessionManager) -> aioble.Service:
 def parse_last_synced_timestamp(request_data: bytes) -> int:
     """Parse last synced timestamp from request bytes.
 
+    Android sends timestamps in Unix epoch (1970), but MicroPython uses epoch 2000.
+    This function converts the incoming Unix timestamp to MicroPython epoch for
+    comparison with stored sessions.
+
     Args:
         request_data: Raw request bytes (should be 4 bytes uint32 little-endian)
 
     Returns:
-        Parsed timestamp as integer
+        Parsed timestamp as integer (converted to MicroPython epoch 2000)
 
     Raises:
         ValueError: If request_data is invalid (wrong length or format)
@@ -93,11 +97,36 @@ def parse_last_synced_timestamp(request_data: bytes) -> int:
         )
 
     try:
-        last_synced = struct.unpack('<I', request_data)[0]
+        # Parse Unix epoch timestamp from Android
+        unix_timestamp = struct.unpack('<I', request_data)[0]
+
+        # Convert Unix epoch (1970) to MicroPython epoch (2000)
+        micropython_timestamp = unix_to_micropython_timestamp(unix_timestamp)
+
     except struct.error as e:
         raise ValueError(f"Failed to parse request: {e}")
 
-    return last_synced
+    return micropython_timestamp
+
+
+def session_to_unix_dict(session: Session) -> t.Dict[str, t.Any]:
+    """Convert a Session to dictionary with Unix epoch timestamps.
+
+    The sync protocol uses Unix epoch (1970) for compatibility with standard systems,
+    but sessions are stored with MicroPython epoch (2000) internally.
+
+    Args:
+        session: Session to convert
+
+    Returns:
+        Dictionary with timestamps converted to Unix epoch (1970)
+    """
+    session_dict = session.to_dict()
+    return {
+        "start_time": micropython_to_unix_timestamp(session_dict["start_time"]),
+        "end_time": micropython_to_unix_timestamp(session_dict["end_time"]),
+        "revolutions": session_dict["revolutions"],
+    }
 
 
 def build_sync_response_dict(sessions: t.List[Session]) -> t.Dict[str, t.Any]:
@@ -113,10 +142,14 @@ def build_sync_response_dict(sessions: t.List[Session]) -> t.Dict[str, t.Any]:
         - If sessions is empty: {"session": None, "remaining_sessions": 0}
         - Otherwise: {"session": {...}, "remaining_sessions": N}
           where N is the count of remaining sessions after the first one
+
+    Note:
+        Session timestamps are converted from MicroPython epoch (2000) to Unix epoch (1970)
+        for compatibility with Android/standard systems.
     """
     n = len(sessions)
     return {
-        "session": sessions[0] if n > 0 else None,
+        "session": session_to_unix_dict(sessions[0]) if n > 0 else None,
         "remaining_sessions": max(n - 1, 0)
     }
 

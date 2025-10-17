@@ -42,7 +42,8 @@ class Session:
         """Convert Session to dictionary for JSON serialization.
 
         Returns:
-            Dictionary representation of session.
+            Dictionary representation of session with timestamps in native
+            MicroPython epoch (seconds since 2000-01-01).
         """
         return {
             "start_time": self.start_time,
