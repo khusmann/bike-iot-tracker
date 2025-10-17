@@ -82,9 +82,6 @@ class SessionManager:
     def end_session(self) -> t.Optional[Session]:
         """End the current active session and save it to storage.
 
-        Updates the end_time to now, adds the session to the store,
-        and persists to disk.
-
         Sessions shorter than SESSION_MIN_DURATION_S seconds are discarded and not saved.
 
         Returns:
@@ -93,9 +90,6 @@ class SessionManager:
         if self.current_session is None:
             log("No active session to end")
             return None
-
-        # Update end time
-        self.current_session.end_time = int(time.time())
 
         # Calculate duration
         duration_s = self.current_session.end_time - self.current_session.start_time
@@ -129,16 +123,10 @@ class SessionManager:
         If no session is active, starts a new one.
         Increments the revolution counter and updates the end_time.
         """
-        if self.current_session is None:
-            self.start_session()
-
-        if self.current_session is not None:
-            self.current_session.revolutions += 1
-            self.current_session.end_time = int(time.time())
-            log(
-                f"Session {self.current_session.start_time}: "
-                f"revolution {self.current_session.revolutions}"
-            )
+        session = self.current_session or self.start_session()
+        session.revolutions += 1
+        session.end_time = int(time.time())
+        log(f"Session {session.start_time}: revolution {session.revolutions}")
 
     def save_current_session(self) -> bool:
         """Save the current active session without ending it.
