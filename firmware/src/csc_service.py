@@ -32,11 +32,12 @@ import struct
 import aioble
 import bluetooth
 
+from config import config
 from models import CrankTelemetry
 from state import TelemetryManager
 from utils import log
 
-# BLE Service and Characteristic UUIDs
+# BLE Service and Characteristic UUIDs (from BLE specification)
 # Cycling Speed and Cadence Service
 CSC_SERVICE_UUID = bluetooth.UUID(0x1816)
 # CSC Measurement Characteristic
@@ -45,9 +46,6 @@ CSC_MEASUREMENT_UUID = bluetooth.UUID(0x2A5B)
 # CSC timing constants
 # Time is measured in 1/1024 second units per BLE CSC spec
 CSC_TIME_UNIT_HZ = 1024
-
-# Notification interval: ~1 Hz per CSC spec recommendation
-CSC_NOTIFICATION_INTERVAL_S = 2
 
 
 def crank_telemetry_to_csc_measurement(telemetry: CrankTelemetry) -> bytes:
@@ -98,7 +96,7 @@ async def notify_csc_subscriptions(
 
     while True:
         # Sleep briefly for responsiveness to disconnection
-        await asyncio.sleep(CSC_NOTIFICATION_INTERVAL_S)
+        await asyncio.sleep(config.csc_notification_interval_s)
 
         measurement_data = crank_telemetry_to_csc_measurement(
             telemetry_manager.crank_telemetry

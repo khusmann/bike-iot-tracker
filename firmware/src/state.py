@@ -7,15 +7,10 @@ import time
 import typing as t
 from udataclasses import dataclass, field
 
+from config import config
 from models import Session, SessionStore, CrankTelemetry
 from storage import read_session_store, write_session_store
 from utils import log
-
-# File to save sessions to
-SESSIONS_FILE = "/sessions.json"
-
-# Minimum session duration in seconds (5 minutes)
-SESSION_MIN_DURATION_S = 5 * 60
 
 
 @dataclass
@@ -48,12 +43,11 @@ class SessionManager:
     Tracks the currently active session (if any) and maintains the session store.
 
     Attributes:
-        SESSIONS_FILE: Path to sessions JSON file.
         store: Persistent session store.
         current_session: Currently active session, if any.
     """
     store: SessionStore = field(
-        default_factory=lambda: read_session_store(SESSIONS_FILE)
+        default_factory=lambda: read_session_store(config.sessions_file)
     )
     current_session: t.Optional[Session] = None
 
@@ -82,7 +76,7 @@ class SessionManager:
     def end_session(self) -> t.Optional[Session]:
         """End the current active session and save it to storage.
 
-        Sessions shorter than SESSION_MIN_DURATION_S seconds are discarded and not saved.
+        Sessions shorter than config.session_min_duration_s seconds are discarded and not saved.
 
         Returns:
             The ended Session, or None if no active session or session too short.
@@ -95,10 +89,10 @@ class SessionManager:
         duration_s = self.current_session.end_time - self.current_session.start_time
 
         # Discard sessions shorter than minimum duration
-        if duration_s < SESSION_MIN_DURATION_S:
+        if duration_s < config.session_min_duration_s:
             log(f"Discarded short session {self.current_session.start_time}: "
                 f"{self.current_session.revolutions} revolutions, "
-                f"duration={duration_s}s (< {SESSION_MIN_DURATION_S}s minimum)")
+                f"duration={duration_s}s (< {config.session_min_duration_s}s minimum)")
             self.current_session = None
             return None
 
@@ -106,7 +100,7 @@ class SessionManager:
         self.store.sessions.append(self.current_session)
 
         # Save to disk
-        write_session_store(self.store, SESSIONS_FILE)
+        write_session_store(self.store, config.sessions_file)
 
         log(f"Ended session {self.current_session.start_time}: "
             f"{self.current_session.revolutions} revolutions, "
@@ -146,7 +140,7 @@ class SessionManager:
         # Create a temporary store with just the current session
         # We append it temporarily, save, then remove it
         self.store.sessions.append(self.current_session)
-        success = write_session_store(self.store, SESSIONS_FILE)
+        success = write_session_store(self.store, config.sessions_file)
         self.store.sessions.pop()  # Remove it (not truly ended yet)
 
         if success:

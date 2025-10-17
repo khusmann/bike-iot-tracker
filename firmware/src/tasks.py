@@ -12,15 +12,9 @@ from bluetooth import UUID
 
 import aioble
 
+from config import config
 from state import SessionManager, AppState
 from utils import log
-
-# Session boundary detection: end session after 10 minutes of inactivity
-# IDLE_TIMEOUT_MS = 10 * 60 * 1000  # 10 minutes in milliseconds
-IDLE_TIMEOUT_MS = 30 * 1000  # 30 seconds in milliseconds (for debug)
-
-# Periodic persistence: save active session every 5 minutes
-SAVE_INTERVAL_S = 5 * 60  # 5 minutes in seconds
 
 
 async def session_idle_timeout(
@@ -30,7 +24,7 @@ async def session_idle_timeout(
     """Monitor for idle periods and automatically end sessions.
 
     Checks the last_physical_time_ms from telemetry state. If more than
-    IDLE_TIMEOUT_MS has elapsed without a crank event, ends the current session.
+    config.idle_timeout_ms has elapsed without a crank event, ends the current session.
 
     Args:
         session_manager: SessionManager instance to end sessions.
@@ -58,7 +52,7 @@ async def session_idle_timeout(
 
         elapsed_ms = ticks_diff(current_time_ms, last_event_ms)
 
-        if elapsed_ms >= IDLE_TIMEOUT_MS:
+        if elapsed_ms >= config.session_idle_timeout_ms:
             log(f"Idle timeout detected: {elapsed_ms}ms since last event")
             session_manager.end_session()
 
@@ -68,7 +62,7 @@ async def session_periodic_save(
 ) -> None:
     """Periodically save the active session.
 
-    Saves the current session every SAVE_INTERVAL_S seconds without ending it.
+    Saves the current session every config.save_interval_s seconds without ending it.
     This ensures that session data is preserved even if the device loses power.
 
     Args:
@@ -77,7 +71,7 @@ async def session_periodic_save(
     log("Periodic save task started")
 
     while True:
-        await asyncio.sleep(SAVE_INTERVAL_S)
+        await asyncio.sleep(config.session_save_interval_s)
 
         if session_manager.has_active_session():
             log("Periodic save triggered")
@@ -98,7 +92,7 @@ async def ble_advertise(device_name: str, services: t.Sequence[UUID]) -> None:
         log(f"Advertising as '{device_name}'...")
 
         connection = await aioble.advertise(
-            interval_us=250_000,  # 250ms advertising interval
+            interval_us=config.ble_advertising_interval_us,
             name=device_name,
             services=services,
             appearance=0x0000,  # Generic appearance

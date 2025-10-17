@@ -1,3 +1,4 @@
+import typing as t
 import asyncio
 from machine import Pin
 
@@ -5,20 +6,14 @@ import aioble
 from primitives.pushbutton import Pushbutton
 
 import tasks
+from config import config
 from state import AppState
 from utils import ensure_wifi_connected, sync_ntp_time, log, blink_led, FAST_BLINK_PATTERN
 from sync_service import register_sync_service
 from csc_service import register_csc_service
 
-# Hardware configuration
-led = Pin(4, Pin.OUT)
-reed = Pin(5, Pin.IN, Pin.PULL_UP)
 
-# Device name for advertising
-DEVICE_NAME = "BikeTracker"
-
-
-async def on_reed_press(state: AppState) -> None:
+async def on_reed_press(state: AppState, led: t.Optional[Pin]) -> None:
     """Handle reed switch press event.
 
     Updates telemetry on crank rotation, records revolution in session manager,
@@ -45,6 +40,10 @@ async def main() -> None:
     Initializes application state, ensures WiFi/NTP connectivity, starts
     background tasks, and runs BLE peripheral.
     """
+    # Hardware configuration
+    led = Pin(config.led_pin, Pin.OUT)
+    reed = Pin(config.reed_pin, Pin.IN, Pin.PULL_UP)
+
     # Create application state (session manager initialized via default_factory)
     state = AppState()
 
@@ -54,8 +53,9 @@ async def main() -> None:
 
     # Set up reed switch using Pushbutton primitive
     # sense=1 because reed switch is active-low (PULL_UP, closed = 0)
+    # TODO: Use interrupts instead
     reed_button = Pushbutton(reed, sense=1)
-    reed_button.press_func(on_reed_press, (state, ))
+    reed_button.press_func(on_reed_press, (state, led))
 
     log("Starting BikeTracker firmware...")
     log(f"LED on GPIO {led}")
@@ -91,7 +91,7 @@ async def main() -> None:
 
     # Start BLE advertise as the main task
     await tasks.ble_advertise(
-        DEVICE_NAME,
+        config.device_name,
         [csc_service.uuid, sync_service.uuid]
     )
 
