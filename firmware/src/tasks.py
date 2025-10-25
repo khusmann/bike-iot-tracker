@@ -88,6 +88,10 @@ async def ble_advertise(device_name: str, services: t.Sequence[UUID]) -> None:
         state: Application state object containing telemetry data.
         device_name: The device name to advertise.
     """
+
+    # Notes on concurrent connections in Micropython BLE:
+    # https://github.com/orgs/micropython/discussions/9775
+
     while True:
         log(f"Advertising as '{device_name}'...")
 
