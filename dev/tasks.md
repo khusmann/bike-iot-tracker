@@ -19,74 +19,107 @@ Tasks for **Stage 3: Background Sync to HealthConnect**
 
 ## Remaining Tasks
 
-### Firmware Testing (F4)
+### Sync Persistence & Debugging (Current Priority)
 
-- [ ] F4.1 Test session persistence across reboots
-- [ ] F4.2 Verify session boundary detection with various idle periods
-- [ ] F4.3 Test multi-client sync:
-  - Run test_ble_client.py twice with different lastSyncedStartTime values
-  - Verify both syncs get all requested sessions
-  - Example: Client A syncs from 0, Client B syncs from middle timestamp
-- [ ] F4.4 Test bike storage reset scenario:
-  - Delete /sessions.json on bike
-  - Do some rides (new sessions with current timestamps)
-  - Verify old client with old lastSyncedStartTime still syncs new sessions
-- [ ] F4.5 Ensure WiFi/WebREPL still works for development
-- [ ] F4.6 Test with realistic session load (50+ sessions)
-- [ ] F4.7 Verify sync protocol edge cases:
-  - Request with lastSyncedStartTime = 0 (should return first session)
-  - Request with lastSyncedStartTime = last session (should return null)
-  - Request with lastSyncedStartTime in future (should return null)
-  - Connection drops mid-sync (should resume from lastSynced on reconnect)
-  - Verify remaining_sessions count accurate throughout sync
+**Problem:** Syncs may not be persisting across reboots. Need diagnostic UI and testing plan.
 
-### Android App Testing (A1)
+**Root Cause Analysis:**
+- Last sync timestamp is queried from HealthConnect, not stored locally
+- WorkManager should persist across reboots (ExistingPeriodicWorkPolicy.KEEP)
+- Need UI to verify sync state and manually control sync schedule
 
-**Verification Tools:**
+**Plan:**
 
-- Primary: `adb logcat` with TAG filters (e.g., `adb logcat BikeSync:V *:S`)
-- All test logs already in BackgroundSyncWorker.kt
+#### Phase 1: Add Local Sync State Persistence
+1. Create SharedPreferences storage for sync metadata:
+   - Last successful sync timestamp
+   - Last sync attempt timestamp
+   - Last synced session ID
+   - Sync success/failure count
+   - Last error message (if any)
 
-- [ ] A1.T1 Test WorkManager triggers background worker correctly
-  - Use `adb logcat BikeSync:V *:S` to monitor logs
-  - For faster testing: trigger manually via WorkManager test APIs
-  - Verify "Background sync worker started" log appears
-- [ ] A1.T2 Test low-power BLE scanning finds bike
-  - Run `adb logcat BikeSync:V BluetoothAdapter:V *:S`
-  - Verify "Device discovered: BikeTracker" appears in logs
-  - Measure time between "scan started" and "device discovered"
-- [ ] A1.T3 Test background connection lifecycle
-  - Run `adb logcat BikeSync:V *:S` while worker runs
-  - Verify connection sequence completes within 30 seconds
-  - Check for error logs (connection timeouts, GATT errors)
-- [ ] A1.T4 Test app is killed/closed scenarios
-  - Close app via recent apps (swipe away)
-  - Monitor via: `adb logcat BikeSync:V WorkManager:V *:S`
-  - Watch for "Background sync worker started" log after scheduled time
-- [ ] A1.T5 Test device reboot
-  - Reboot phone
-  - After boot + scheduled interval, run `adb logcat BikeSync:V *:S`
-  - Verify "Background sync worker started" appears
-- [ ] A1.T6 Verify foreground connection still works
-  - Open app (triggers foreground connection)
-  - Manually trigger background sync
-  - Run `adb logcat BikeSync:V *:S`
-  - Verify both connections work without errors
-  - Verify no "GATT connection busy" or conflict errors
+2. Update BackgroundSyncWorker to:
+   - Write sync results to SharedPreferences after each sync
+   - Compare SharedPreferences timestamp with HealthConnect timestamp (detect HC data loss)
+   - Log sync attempts for debugging
 
-### UI Updates (A4)
+#### Phase 2: Add Sync Settings UI (Second Tab)
+1. Restructure MainActivity to support two tabs:
+   - **Tab 1: "Device"** - Current connection/RPM display (existing UI)
+   - **Tab 2: "Sync"** - New sync settings and diagnostics
 
-- [ ] A4.1 Show last sync time in UI
-  - Display timestamp of last successful sync completion
-  - Show "Never synced" if no sync has occurred
-- [ ] A4.2 Display sync status (syncing/idle/error)
-  - During sync: show progress (e.g., "Syncing... 3 sessions remaining")
-  - Use `remaining_sessions` count from protocol
-- [ ] A4.3 Show count of stored sessions (optional)
-  - Query HealthConnect for total cycling session count
-- [ ] A4.4 Add manual sync trigger button
-  - Trigger immediate sync (bypass WorkManager schedule)
-  - Disable during active sync to prevent conflicts
-- [ ] A4.5 Update UI to work without persistent connection
-  - Remove connection status indicators (no persistent connection)
-  - Show last sync status instead
+2. Create SyncSettingsScreen composable with:
+   - **Last Sync Info Section:**
+     - Last sync time (human-readable, e.g., "2 hours ago")
+     - Last synced session timestamp (Unix time + formatted date)
+     - Sync status indicator (success/failed with error message)
+
+   - **Sync Schedule Control:**
+     - Display current WorkManager state (scheduled/not scheduled)
+     - Toggle to enable/disable periodic sync
+     - Dropdown/slider to adjust sync interval (15min/30min/1hr/2hr)
+     - "Sync Now" button (manual trigger)
+
+   - **Diagnostic Info:**
+     - Number of syncs since app install (success/failure counts)
+     - HealthConnect vs SharedPreferences timestamp comparison
+     - WorkManager job status (next scheduled run time)
+     - Bike address of last synced device
+
+3. Add state management:
+   - Extend BikeState or create new SyncState data class
+   - Add ViewModel or state holders for sync settings tab
+   - Query WorkManager status to display "sync timer enabled" state
+
+#### Phase 3: Testing Plan for Reboot Persistence
+1. **Test Setup:**
+   - Clear HealthConnect data
+   - Clear app data
+   - Fresh install of app
+
+2. **Test Scenarios:**
+   - **Scenario A: Normal Operation**
+     1. Perform manual sync
+     2. Verify sync timestamp appears in Sync tab
+     3. Reboot device
+     4. Open app and check Sync tab (timestamp should persist)
+     5. Wait for next scheduled sync (or trigger manually)
+     6. Verify new sync completes successfully
+
+   - **Scenario B: WorkManager Persistence**
+     1. Enable periodic sync (verify "timer enabled" indicator)
+     2. Note next scheduled sync time
+     3. Reboot device (without opening app)
+     4. Wait for scheduled sync time to pass
+     5. Open app and check if sync occurred (last sync time updated)
+
+   - **Scenario C: HealthConnect Data Loss**
+     1. Perform successful sync
+     2. Clear HealthConnect data (Settings → Apps → Health Connect → Clear Data)
+     3. Open app and check Sync tab
+     4. Should show warning: SharedPreferences timestamp exists but HC timestamp is 0
+     5. Next sync should re-download all sessions
+
+   - **Scenario D: App Data Cleared**
+     1. Perform successful sync
+     2. Clear app data (Settings → Apps → Bike Tracker → Clear Data)
+     3. Reboot device
+     4. Open app - sync schedule should NOT be active (user must re-enable)
+
+3. **Logging & Debugging:**
+   - Add LogCat tags for all sync operations
+   - Log WorkManager job scheduling/cancellation
+   - Log SharedPreferences writes
+   - Add "Export Logs" button in Sync tab (copy diagnostic info to clipboard)
+
+#### Phase 4: Implementation Order
+1. ✅ Create SyncPreferences helper class (SharedPreferences wrapper)
+2. ✅ Update BackgroundSyncWorker to persist sync state
+3. ✅ Add tab navigation to MainActivity
+4. ✅ Implement SyncSettingsScreen composable
+5. ✅ Add sync state to ViewModel/state holders
+6. ✅ Implement sync schedule controls (enable/disable/interval)
+7. ✅ Add diagnostic displays (timestamps, status, counts)
+8. ✅ Run test scenarios A-D and document results
+9. ✅ Fix any identified issues
+10. ✅ Update sync interval to 1 hour (production setting)
