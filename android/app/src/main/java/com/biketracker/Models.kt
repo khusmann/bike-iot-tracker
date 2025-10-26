@@ -51,6 +51,38 @@ data class BikeState(
 )
 
 /**
+ * Sync status for display in UI
+ */
+sealed class SyncStatus {
+    data object NeverSynced : SyncStatus()
+    data class Success(val timestamp: Long) : SyncStatus()
+    data class Failed(val message: String, val timestamp: Long) : SyncStatus()
+}
+
+/**
+ * Sync state for the sync settings tab
+ *
+ * @property lastSyncStatus Status of the last sync attempt
+ * @property lastSyncedSessionId Unix timestamp of the last synced session
+ * @property syncSuccessCount Total number of successful syncs
+ * @property syncFailureCount Total number of failed syncs
+ * @property syncEnabled Whether periodic sync is enabled
+ * @property syncIntervalMinutes Sync interval in minutes
+ * @property lastSyncedDeviceAddress Bluetooth address of last synced device
+ * @property healthConnectTimestamp Last sync timestamp from HealthConnect (for comparison)
+ */
+data class SyncState(
+    val lastSyncStatus: SyncStatus = SyncStatus.NeverSynced,
+    val lastSyncedSessionId: Long = 0L,
+    val syncSuccessCount: Int = 0,
+    val syncFailureCount: Int = 0,
+    val syncEnabled: Boolean = false,
+    val syncIntervalMinutes: Int = 60,
+    val lastSyncedDeviceAddress: String? = null,
+    val healthConnectTimestamp: Long = 0L
+)
+
+/**
  * Calculates cadence (RPM) from two consecutive CSC measurements
  *
  * With 1 Hz continuous notifications, the firmware sends updates even when idle.

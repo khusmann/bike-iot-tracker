@@ -76,6 +76,10 @@ class BackgroundSyncWorker(
 
     override suspend fun doWork(): Result {
         Log.d(TAG, "Background sync worker started")
+        val syncPrefs = SyncPreferences(applicationContext)
+
+        // Record sync attempt
+        syncPrefs.lastSyncAttemptTimestamp = System.currentTimeMillis()
 
         return try {
             // Run entire sync with 30 second timeout
@@ -90,15 +94,18 @@ class BackgroundSyncWorker(
                 }
                 syncResult == false -> {
                     Log.w(TAG, "Background sync failed, will retry")
+                    syncPrefs.recordSyncFailure("Sync failed (device not found or connection error)")
                     Result.retry()
                 }
                 else -> {
                     Log.w(TAG, "Background sync timed out after ${TOTAL_TIMEOUT_MS}ms")
+                    syncPrefs.recordSyncFailure("Sync timed out after ${TOTAL_TIMEOUT_MS}ms")
                     Result.retry()
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Background sync error: ${e.message}", e)
+            syncPrefs.recordSyncFailure("Error: ${e.message}")
             Result.failure()
         }
     }
@@ -119,13 +126,24 @@ class BackgroundSyncWorker(
         // Get last synced timestamp from HealthConnect
         val healthConnect = HealthConnectHelper(applicationContext)
         val lastSyncedTimestamp = healthConnect.getLastSyncedTimestamp(device.device.address)
-        Log.d(TAG, "Last synced timestamp: $lastSyncedTimestamp")
+        Log.d(TAG, "Last synced timestamp from HealthConnect: $lastSyncedTimestamp")
+
+        // Check SharedPreferences timestamp for diagnostic purposes
+        val syncPrefs = SyncPreferences(applicationContext)
+        val localLastSyncedSessionId = syncPrefs.lastSyncedSessionId
+        Log.d(TAG, "Last synced session ID from local storage: $localLastSyncedSessionId")
+
+        // Detect potential HealthConnect data loss
+        if (localLastSyncedSessionId > lastSyncedTimestamp && localLastSyncedSessionId > 0) {
+            Log.w(TAG, "WARNING: Local sync state ($localLastSyncedSessionId) is newer than HealthConnect ($lastSyncedTimestamp). HealthConnect data may have been cleared.")
+        }
 
         // Connect to device and sync
         var gatt: BluetoothGatt? = null
         try {
             val syncResult = suspendCancellableCoroutine<Boolean> { continuation ->
                 var resumed = false
+                var sessionsSynced = 0
 
                 gatt = device.device.connectGatt(
                     applicationContext,
@@ -273,7 +291,17 @@ class BackgroundSyncWorker(
 
                                 if (sessionJson == null) {
                                     // A3.4: No more sessions, sync complete
-                                    Log.d(TAG, "Sync complete - no more sessions")
+                                    Log.d(TAG, "Sync complete - $sessionsSynced sessions synced")
+
+                                    // Record successful sync if we synced any sessions
+                                    if (sessionsSynced > 0) {
+                                        syncPrefs.recordSyncSuccess(
+                                            device.device.address,
+                                            currentLastSyncedTimestamp
+                                        )
+                                        Log.d(TAG, "Recorded successful sync to local storage")
+                                    }
+
                                     gatt.disconnect()
                                     resumeOnce(continuation, true)
                                     return
@@ -296,8 +324,9 @@ class BackgroundSyncWorker(
                                             revolutions
                                         )
 
-                                        // Update last synced timestamp
+                                        // Update last synced timestamp and increment counter
                                         currentLastSyncedTimestamp = startTime
+                                        sessionsSynced++
 
                                         // Request next session
                                         requestNextSession(gatt, sessionDataChar!!)

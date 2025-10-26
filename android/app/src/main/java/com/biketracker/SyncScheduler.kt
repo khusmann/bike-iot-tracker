@@ -88,4 +88,13 @@ object SyncScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(BackgroundSyncWorker.WORK_NAME)
         Log.d(TAG, "Periodic background sync cancelled")
     }
+
+    /**
+     * Cancel periodic background sync (alias for cancelSync)
+     *
+     * @param context Application context
+     */
+    fun cancelPeriodicSync(context: Context) {
+        cancelSync(context)
+    }
 }

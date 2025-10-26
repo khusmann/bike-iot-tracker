@@ -21,9 +21,11 @@ Tasks for **Stage 3: Background Sync to HealthConnect**
 
 ### Sync Persistence & Debugging (Current Priority)
 
-**Problem:** Syncs may not be persisting across reboots. Need diagnostic UI and testing plan.
+**Problem:** Syncs may not be persisting across reboots. Need diagnostic UI and
+testing plan.
 
 **Root Cause Analysis:**
+
 - Last sync timestamp is queried from HealthConnect, not stored locally
 - WorkManager should persist across reboots (ExistingPeriodicWorkPolicy.KEEP)
 - Need UI to verify sync state and manually control sync schedule
@@ -31,7 +33,9 @@ Tasks for **Stage 3: Background Sync to HealthConnect**
 **Plan:**
 
 #### Phase 1: Add Local Sync State Persistence
+
 1. Create SharedPreferences storage for sync metadata:
+
    - Last successful sync timestamp
    - Last sync attempt timestamp
    - Last synced session ID
@@ -40,21 +44,27 @@ Tasks for **Stage 3: Background Sync to HealthConnect**
 
 2. Update BackgroundSyncWorker to:
    - Write sync results to SharedPreferences after each sync
-   - Compare SharedPreferences timestamp with HealthConnect timestamp (detect HC data loss)
+   - Compare SharedPreferences timestamp with HealthConnect timestamp (detect HC
+     data loss)
    - Log sync attempts for debugging
 
 #### Phase 2: Add Sync Settings UI (Second Tab)
+
 1. Restructure MainActivity to support two tabs:
+
    - **Tab 1: "Device"** - Current connection/RPM display (existing UI)
    - **Tab 2: "Sync"** - New sync settings and diagnostics
 
 2. Create SyncSettingsScreen composable with:
+
    - **Last Sync Info Section:**
+
      - Last sync time (human-readable, e.g., "2 hours ago")
      - Last synced session timestamp (Unix time + formatted date)
      - Sync status indicator (success/failed with error message)
 
    - **Sync Schedule Control:**
+
      - Display current WorkManager state (scheduled/not scheduled)
      - Toggle to enable/disable periodic sync
      - Dropdown/slider to adjust sync interval (15min/30min/1hr/2hr)
@@ -72,13 +82,16 @@ Tasks for **Stage 3: Background Sync to HealthConnect**
    - Query WorkManager status to display "sync timer enabled" state
 
 #### Phase 3: Testing Plan for Reboot Persistence
+
 1. **Test Setup:**
-   - Clear HealthConnect data
+
    - Clear app data
    - Fresh install of app
 
 2. **Test Scenarios:**
+
    - **Scenario A: Normal Operation**
+
      1. Perform manual sync
      2. Verify sync timestamp appears in Sync tab
      3. Reboot device
@@ -87,6 +100,7 @@ Tasks for **Stage 3: Background Sync to HealthConnect**
      6. Verify new sync completes successfully
 
    - **Scenario B: WorkManager Persistence**
+
      1. Enable periodic sync (verify "timer enabled" indicator)
      2. Note next scheduled sync time
      3. Reboot device (without opening app)
@@ -94,10 +108,12 @@ Tasks for **Stage 3: Background Sync to HealthConnect**
      5. Open app and check if sync occurred (last sync time updated)
 
    - **Scenario C: HealthConnect Data Loss**
+
      1. Perform successful sync
      2. Clear HealthConnect data (Settings → Apps → Health Connect → Clear Data)
      3. Open app and check Sync tab
-     4. Should show warning: SharedPreferences timestamp exists but HC timestamp is 0
+     4. Should show warning: SharedPreferences timestamp exists but HC timestamp
+        is 0
      5. Next sync should re-download all sessions
 
    - **Scenario D: App Data Cleared**
@@ -113,6 +129,7 @@ Tasks for **Stage 3: Background Sync to HealthConnect**
    - Add "Export Logs" button in Sync tab (copy diagnostic info to clipboard)
 
 #### Phase 4: Implementation Order
+
 1. ✅ Create SyncPreferences helper class (SharedPreferences wrapper)
 2. ✅ Update BackgroundSyncWorker to persist sync state
 3. ✅ Add tab navigation to MainActivity
