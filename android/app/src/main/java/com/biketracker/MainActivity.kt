@@ -242,7 +242,7 @@ fun BikeTrackerScreen(viewModel: BikeViewModel) {
         // Tab content
         when (selectedTabIndex) {
             0 -> DeviceTab(viewModel, state)
-            1 -> SyncTab(context)
+            1 -> SyncTab(context, state.healthConnectAvailable)
         }
     }
 }
@@ -277,19 +277,7 @@ fun DeviceTab(viewModel: BikeViewModel, state: BikeState) {
             unit = ""
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // HealthConnect status
-        Text(
-            text = "HealthConnect: ${if (state.healthConnectAvailable) "Available" else "Not Available"}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (state.healthConnectAvailable)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.error
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(48.dp))
 
         // Connect/Disconnect button
         when (state.connectionState) {
@@ -314,7 +302,7 @@ fun DeviceTab(viewModel: BikeViewModel, state: BikeState) {
 }
 
 @Composable
-fun SyncTab(context: android.content.Context) {
+fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
     // Load sync state from SharedPreferences
     val syncPrefs = remember { SyncPreferences(context) }
     val healthConnectHelper = remember { HealthConnectHelper(context) }
@@ -340,6 +328,18 @@ fun SyncTab(context: android.content.Context) {
             text = "Sync Settings",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // HealthConnect status
+        Text(
+            text = "HealthConnect: ${if (healthConnectAvailable) "Available" else "Not Available"}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (healthConnectAvailable)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.error
         )
 
         Spacer(modifier = Modifier.height(24.dp))
