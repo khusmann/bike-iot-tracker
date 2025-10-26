@@ -406,7 +406,9 @@ class BackgroundSyncWorker(
             exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY,
             title = "Stationary Bike",
             metadata = Metadata(
-                clientRecordId = "bike-$bikeAddress-$startTime"
+                clientRecordId = "bike-$bikeAddress-$startTime",
+                // Use start time as version - ensures duplicates are handled as upserts
+                clientRecordVersion = startTime
             )
         )
 
