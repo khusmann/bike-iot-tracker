@@ -62,9 +62,8 @@ sealed class SyncStatus {
 /**
  * Sync state for the sync settings tab
  *
- * Note: syncEnabled and syncIntervalMinutes are NOT stored here
- * - syncEnabled: managed by WorkManager directly
- * - syncIntervalMinutes: hardcoded in SyncScheduler (15 min for testing)
+ * Note: syncEnabled is NOT stored here - it's managed via SharedPreferences
+ * Note: syncInterval is NOT stored here - it's a constant in SyncScheduler
  *
  * @property lastSyncStatus Status of the last sync attempt
  * @property lastSyncedSessionId Unix timestamp of the last synced session

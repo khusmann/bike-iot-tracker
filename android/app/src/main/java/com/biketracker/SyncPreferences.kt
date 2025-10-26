@@ -26,7 +26,6 @@ class SyncPreferences(context: Context) {
         private const val KEY_SYNC_FAILURE_COUNT = "sync_failure_count"
         private const val KEY_LAST_ERROR_MESSAGE = "last_error_message"
         private const val KEY_LAST_SYNCED_DEVICE_ADDRESS = "last_synced_device_address"
-        private const val KEY_SYNC_INTERVAL_MINUTES = "sync_interval_minutes"
         private const val KEY_SYNC_ENABLED = "sync_enabled"
         private const val KEY_TARGET_DEVICE_ADDRESS = "target_device_address"
         private const val KEY_TARGET_DEVICE_NAME = "target_device_name"
@@ -82,22 +81,7 @@ class SyncPreferences(context: Context) {
         set(value) = prefs.edit().putString(KEY_LAST_SYNCED_DEVICE_ADDRESS, value).apply()
 
     /**
-     * Sync interval in minutes (default: 60 minutes)
-     *
-     * Note: This is deprecated and not used. The actual sync interval
-     * is hardcoded in SyncScheduler.kt (15 minutes for testing).
-     * Kept for backwards compatibility with existing preferences.
-     */
-    @Deprecated("Sync interval is hardcoded in SyncScheduler, this value is not used")
-    var syncIntervalMinutes: Int
-        get() = prefs.getInt(KEY_SYNC_INTERVAL_MINUTES, 60)
-        set(value) = prefs.edit().putInt(KEY_SYNC_INTERVAL_MINUTES, value).apply()
-
-    /**
      * Whether periodic sync is enabled (default: false)
-     *
-     * Note: This is deprecated - use SyncScheduler.isSyncScheduled() instead
-     * which queries WorkManager directly for the actual sync state
      */
     var syncEnabled: Boolean
         get() = prefs.getBoolean(KEY_SYNC_ENABLED, false)

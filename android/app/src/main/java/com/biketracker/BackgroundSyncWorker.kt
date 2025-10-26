@@ -394,7 +394,7 @@ class BackgroundSyncWorker(
         bikeAddress: String,
         startTime: Long,
         endTime: Long,
-        revolutions: Int
+        @Suppress("UNUSED_PARAMETER") revolutions: Int  // Reserved for future cadence time series
     ) {
         val healthConnectClient = HealthConnectClient.getOrCreate(applicationContext)
 
