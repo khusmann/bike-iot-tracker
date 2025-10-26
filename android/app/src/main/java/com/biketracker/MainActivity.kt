@@ -307,12 +307,14 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
     var healthConnectTimestamp by remember { mutableStateOf(0L) }
     var syncEnabled by remember { mutableStateOf(syncPrefs.syncEnabled) }
     var isBatteryOptimizationDisabled by remember { mutableStateOf(false) }
+    var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
 
     // Refresh sync state and query HealthConnect periodically
     LaunchedEffect(Unit) {
         while (true) {
             syncState = loadSyncState(syncPrefs)
             syncEnabled = syncPrefs.syncEnabled
+            currentTime = System.currentTimeMillis() // Update current time to trigger recomposition
 
             // Check battery optimization status
             isBatteryOptimizationDisabled = isBatteryOptimizationDisabled(context)
@@ -329,7 +331,7 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
                 }
             }
 
-            kotlinx.coroutines.delay(1000) // Refresh every second
+            kotlinx.coroutines.delay(20_000) // Refresh every 20 seconds to update relative timestamps
         }
     }
 
