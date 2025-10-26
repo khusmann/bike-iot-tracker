@@ -21,6 +21,13 @@ object SyncScheduler {
     private const val TAG = "BikeSync"
 
     /**
+     * Sync interval in minutes
+     * For testing: 15 minutes (minimum allowed by WorkManager)
+     * For production: should be 60 minutes or more
+     */
+    const val SYNC_INTERVAL_MINUTES = 15L
+
+    /**
      * Schedule periodic background sync
      *
      * For testing: uses 15-minute interval (minimum allowed by WorkManager)
@@ -35,11 +42,11 @@ object SyncScheduler {
             .build()
 
         val syncWorkRequest = PeriodicWorkRequestBuilder<BackgroundSyncWorker>(
-            // Use 15 minutes for testing (minimum allowed)
-            // Change to 1 hour for production: 1, TimeUnit.HOURS
-            15, TimeUnit.MINUTES
+            SYNC_INTERVAL_MINUTES, TimeUnit.MINUTES
         )
             .setConstraints(constraints)
+            // Prevent immediate execution on app launch - delay first sync by interval
+            .setInitialDelay(SYNC_INTERVAL_MINUTES, TimeUnit.MINUTES)
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -49,7 +56,7 @@ object SyncScheduler {
             syncWorkRequest
         )
 
-        Log.d(TAG, "Background sync scheduling ensured (every 15 minutes, KEEP policy)")
+        Log.d(TAG, "Background sync scheduled (every $SYNC_INTERVAL_MINUTES minutes, first sync in $SYNC_INTERVAL_MINUTES minutes, KEEP policy)")
     }
 
     /**
@@ -87,5 +94,14 @@ object SyncScheduler {
     fun cancelSync(context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(BackgroundSyncWorker.WORK_NAME)
         Log.d(TAG, "Periodic background sync cancelled")
+    }
+
+    /**
+     * Cancel periodic background sync (alias for cancelSync)
+     *
+     * @param context Application context
+     */
+    fun cancelPeriodicSync(context: Context) {
+        cancelSync(context)
     }
 }

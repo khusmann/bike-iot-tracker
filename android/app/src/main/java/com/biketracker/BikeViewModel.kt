@@ -114,7 +114,10 @@ class BikeViewModel(application: Application) : AndroidViewModel(application) {
         bleManager.disconnect()
         cadenceTimeoutJob?.cancel()
         cadenceTimeoutJob = null
-        _state.value = BikeState()
+        // Reset state but preserve HealthConnect availability
+        _state.value = BikeState(
+            healthConnectAvailable = _state.value.healthConnectAvailable
+        )
         previousMeasurement = null
     }
 

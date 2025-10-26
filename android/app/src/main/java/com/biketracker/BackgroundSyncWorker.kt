@@ -76,6 +76,10 @@ class BackgroundSyncWorker(
 
     override suspend fun doWork(): Result {
         Log.d(TAG, "Background sync worker started")
+        val syncPrefs = SyncPreferences(applicationContext)
+
+        // Record sync attempt
+        syncPrefs.lastSyncAttemptTimestamp = System.currentTimeMillis()
 
         return try {
             // Run entire sync with 30 second timeout
@@ -90,15 +94,18 @@ class BackgroundSyncWorker(
                 }
                 syncResult == false -> {
                     Log.w(TAG, "Background sync failed, will retry")
+                    syncPrefs.recordSyncFailure("Sync failed (device not found or connection error)")
                     Result.retry()
                 }
                 else -> {
                     Log.w(TAG, "Background sync timed out after ${TOTAL_TIMEOUT_MS}ms")
+                    syncPrefs.recordSyncFailure("Sync timed out after ${TOTAL_TIMEOUT_MS}ms")
                     Result.retry()
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Background sync error: ${e.message}", e)
+            syncPrefs.recordSyncFailure("Error: ${e.message}")
             Result.failure()
         }
     }
@@ -116,16 +123,19 @@ class BackgroundSyncWorker(
 
         Log.d(TAG, "Found bike tracker: ${device.device.name}")
 
-        // Get last synced timestamp from HealthConnect
+        // Get last synced timestamp from HealthConnect (single source of truth)
         val healthConnect = HealthConnectHelper(applicationContext)
         val lastSyncedTimestamp = healthConnect.getLastSyncedTimestamp(device.device.address)
-        Log.d(TAG, "Last synced timestamp: $lastSyncedTimestamp")
+        Log.d(TAG, "Last synced timestamp from HealthConnect: $lastSyncedTimestamp")
+
+        val syncPrefs = SyncPreferences(applicationContext)
 
         // Connect to device and sync
         var gatt: BluetoothGatt? = null
         try {
             val syncResult = suspendCancellableCoroutine<Boolean> { continuation ->
                 var resumed = false
+                var sessionsSynced = 0
 
                 gatt = device.device.connectGatt(
                     applicationContext,
@@ -273,7 +283,14 @@ class BackgroundSyncWorker(
 
                                 if (sessionJson == null) {
                                     // A3.4: No more sessions, sync complete
-                                    Log.d(TAG, "Sync complete - no more sessions")
+                                    Log.d(TAG, "Sync complete - $sessionsSynced sessions synced")
+
+                                    // Record successful sync if we synced any sessions
+                                    if (sessionsSynced > 0) {
+                                        syncPrefs.recordSyncSuccess(device.device.address)
+                                        Log.d(TAG, "Recorded successful sync to local storage")
+                                    }
+
                                     gatt.disconnect()
                                     resumeOnce(continuation, true)
                                     return
@@ -296,8 +313,9 @@ class BackgroundSyncWorker(
                                             revolutions
                                         )
 
-                                        // Update last synced timestamp
+                                        // Update last synced timestamp and increment counter
                                         currentLastSyncedTimestamp = startTime
+                                        sessionsSynced++
 
                                         // Request next session
                                         requestNextSession(gatt, sessionDataChar!!)
@@ -365,7 +383,7 @@ class BackgroundSyncWorker(
         bikeAddress: String,
         startTime: Long,
         endTime: Long,
-        revolutions: Int
+        @Suppress("UNUSED_PARAMETER") revolutions: Int  // Reserved for future cadence time series
     ) {
         val healthConnectClient = HealthConnectClient.getOrCreate(applicationContext)
 
@@ -377,7 +395,9 @@ class BackgroundSyncWorker(
             exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY,
             title = "Stationary Bike",
             metadata = Metadata(
-                clientRecordId = "bike-$bikeAddress-$startTime"
+                clientRecordId = "bike-$bikeAddress-$startTime",
+                // Use start time as version - ensures duplicates are handled as upserts
+                clientRecordVersion = startTime
             )
         )
 

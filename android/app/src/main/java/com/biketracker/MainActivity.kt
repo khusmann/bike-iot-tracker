@@ -11,19 +11,27 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import android.content.Context
+import android.os.PowerManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,6 +40,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
@@ -48,9 +60,6 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalPermissionsApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Schedule background sync (KEEP policy means won't reschedule if already scheduled)
-        SyncScheduler.schedulePeriodicSync(applicationContext)
 
         setContent {
             BikeTrackerTheme {
@@ -209,7 +218,33 @@ fun PermissionScreen(
 fun BikeTrackerScreen(viewModel: BikeViewModel) {
     val state by viewModel.state.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Device", "Sync")
 
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Tab row
+        TabRow(selectedTabIndex = selectedTabIndex) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTabIndex == index,
+                    onClick = { selectedTabIndex = index },
+                    text = { Text(title) }
+                )
+            }
+        }
+
+        // Tab content
+        when (selectedTabIndex) {
+            0 -> DeviceTab(viewModel, state)
+            1 -> SyncTab(context, state.healthConnectAvailable)
+        }
+    }
+}
+
+@Composable
+fun DeviceTab(viewModel: BikeViewModel, state: BikeState) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -238,42 +273,7 @@ fun BikeTrackerScreen(viewModel: BikeViewModel) {
             unit = ""
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // HealthConnect status
-        Text(
-            text = "HealthConnect: ${if (state.healthConnectAvailable) "Available" else "Not Available"}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (state.healthConnectAvailable)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.error
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Manual sync button
-        Button(onClick = {
-            Log.i("MainActivity", "Manual sync button clicked")
-            SyncScheduler.triggerImmediateSync(context)
-        }) {
-            Text("Sync Now")
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Test button for querying last synced timestamp
-        if (state.healthConnectAvailable) {
-            Button(onClick = {
-                // Test with a dummy bike address
-                Log.i("MainActivity", "Test button clicked - querying last synced timestamp")
-                viewModel.testQueryLastSyncedTimestamp("AA:BB:CC:DD:EE:FF")
-            }) {
-                Text("Test HealthConnect Query")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(48.dp))
 
         // Connect/Disconnect button
         when (state.connectionState) {
@@ -295,6 +295,263 @@ fun BikeTrackerScreen(viewModel: BikeViewModel) {
             }
         }
     }
+}
+
+@Composable
+fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
+    // Load sync state from SharedPreferences
+    val syncPrefs = remember { SyncPreferences(context) }
+    val healthConnectHelper = remember { HealthConnectHelper(context) }
+
+    var syncState by remember { mutableStateOf(loadSyncState(syncPrefs)) }
+    var healthConnectTimestamp by remember { mutableStateOf(0L) }
+    var syncEnabled by remember { mutableStateOf(syncPrefs.syncEnabled) }
+    var isBatteryOptimizationDisabled by remember { mutableStateOf(false) }
+    var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    // Refresh sync state and query HealthConnect periodically
+    LaunchedEffect(Unit) {
+        while (true) {
+            syncState = loadSyncState(syncPrefs)
+            syncEnabled = syncPrefs.syncEnabled
+            currentTime = System.currentTimeMillis() // Update current time to trigger recomposition
+
+            // Check battery optimization status
+            isBatteryOptimizationDisabled = isBatteryOptimizationDisabled(context)
+
+            // Query HealthConnect for last synced timestamp (async)
+            if (healthConnectAvailable && syncPrefs.lastSyncedDeviceAddress != null) {
+                try {
+                    healthConnectTimestamp = healthConnectHelper.getLastSyncedTimestamp(
+                        syncPrefs.lastSyncedDeviceAddress!!
+                    )
+                } catch (e: Exception) {
+                    Log.e("SyncTab", "Error querying HealthConnect: ${e.message}", e)
+                    healthConnectTimestamp = 0L
+                }
+            }
+
+            kotlinx.coroutines.delay(20_000) // Refresh every 20 seconds to update relative timestamps
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Top,
+        horizontalAlignment = Alignment.Start
+    ) {
+        Text(
+            text = "Sync Settings",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Last Sync Info Section
+        Text(
+            text = "Last Sync Info",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        SyncInfoRow("Last sync attempt:", formatTimestamp(syncPrefs.lastSyncAttemptTimestamp))
+
+        when (val status = syncState.lastSyncStatus) {
+            is SyncStatus.NeverSynced -> {
+                SyncInfoRow("Status:", "Never synced")
+            }
+            is SyncStatus.Success -> {
+                SyncInfoRow("Status:", "Success")
+            }
+            is SyncStatus.Failed -> {
+                SyncInfoRow("Status:", "Failed")
+                Text(
+                    text = "Error: ${status.message}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+        }
+
+        // Show when we last updated session data
+        val lastSessionDataUpdate = when (val status = syncState.lastSyncStatus) {
+            is SyncStatus.Success -> status.timestamp
+            else -> 0L
+        }
+        if (lastSessionDataUpdate > 0) {
+            SyncInfoRow("Last session data update:", formatTimestamp(lastSessionDataUpdate))
+        }
+
+        // Show last synced session from HealthConnect
+        if (!healthConnectAvailable) {
+            SyncInfoRow("Last synced session:", "Not available")
+        } else {
+            SyncInfoRow("Last synced session:",
+                if (healthConnectTimestamp > 0) {
+                    formatUnixTimestamp(healthConnectTimestamp)
+                } else {
+                    "None"
+                }
+            )
+        }
+
+        syncState.lastSyncedDeviceAddress?.let { deviceAddress ->
+            SyncInfoRow("Device:", deviceAddress)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Sync Schedule Control Section
+        Text(
+            text = "Sync Schedule",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Periodic sync enabled:")
+            androidx.compose.material3.Switch(
+                checked = syncEnabled,
+                onCheckedChange = { enabled ->
+                    syncPrefs.syncEnabled = enabled  // Keep SharedPreferences in sync
+                    if (enabled) {
+                        SyncScheduler.schedulePeriodicSync(context)
+                    } else {
+                        SyncScheduler.cancelPeriodicSync(context)
+                    }
+                    // syncEnabled will be updated by LaunchedEffect on next iteration
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Show sync interval - value from constant
+        val intervalText = if (syncEnabled) {
+            "${SyncScheduler.SYNC_INTERVAL_MINUTES} minutes"
+        } else {
+            "Not scheduled"
+        }
+        SyncInfoRow("Sync interval:", intervalText)
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = {
+                Log.i("MainActivity", "Manual sync button clicked")
+                SyncScheduler.triggerImmediateSync(context)
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Sync Now")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Battery optimization warning - only show if battery optimization is NOT disabled
+        if (syncEnabled && !isBatteryOptimizationDisabled) {
+            Text(
+                text = "Note: For reliable background sync, disable battery optimization for this app in Android Settings → Apps → Bike Tracker → Battery → Unrestricted",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Diagnostic Info Section
+        Text(
+            text = "Diagnostics",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        SyncInfoRow("Successful syncs:", syncState.syncSuccessCount.toString())
+        SyncInfoRow("Failed syncs:", syncState.syncFailureCount.toString())
+    }
+}
+
+@Composable
+fun SyncInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+fun loadSyncState(syncPrefs: SyncPreferences): SyncState {
+    // Determine sync status
+    val lastSyncStatus = when {
+        syncPrefs.lastSyncSuccessTimestamp == 0L && syncPrefs.lastSyncAttemptTimestamp == 0L -> {
+            SyncStatus.NeverSynced
+        }
+        syncPrefs.lastErrorMessage != null &&
+            syncPrefs.lastSyncAttemptTimestamp > syncPrefs.lastSyncSuccessTimestamp -> {
+            SyncStatus.Failed(syncPrefs.lastErrorMessage!!, syncPrefs.lastSyncAttemptTimestamp)
+        }
+        else -> {
+            SyncStatus.Success(syncPrefs.lastSyncSuccessTimestamp)
+        }
+    }
+
+    return SyncState(
+        lastSyncStatus = lastSyncStatus,
+        syncSuccessCount = syncPrefs.syncSuccessCount,
+        syncFailureCount = syncPrefs.syncFailureCount,
+        lastSyncedDeviceAddress = syncPrefs.lastSyncedDeviceAddress,
+        targetDeviceAddress = syncPrefs.targetDeviceAddress,
+        targetDeviceName = syncPrefs.targetDeviceName
+    )
+}
+
+fun formatTimestamp(timestamp: Long): String {
+    if (timestamp == 0L) return "Never"
+
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+
+    return when {
+        diff < TimeUnit.MINUTES.toMillis(1) -> "Just now"
+        diff < TimeUnit.HOURS.toMillis(1) -> "${TimeUnit.MILLISECONDS.toMinutes(diff)} minutes ago"
+        diff < TimeUnit.DAYS.toMillis(1) -> "${TimeUnit.MILLISECONDS.toHours(diff)} hours ago"
+        else -> {
+            val dateFormat = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
+            dateFormat.format(Date(timestamp))
+        }
+    }
+}
+
+fun formatUnixTimestamp(unixSeconds: Long): String {
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    return "${dateFormat.format(Date(unixSeconds * 1000))} ($unixSeconds)"
 }
 
 @Composable
@@ -339,4 +596,14 @@ fun MetricCard(label: String, value: String, unit: String) {
             )
         }
     }
+}
+
+/**
+ * Check if battery optimization is disabled for this app
+ *
+ * @return true if battery optimization is disabled (app is unrestricted), false otherwise
+ */
+fun isBatteryOptimizationDisabled(context: Context): Boolean {
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+    return powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: false
 }
