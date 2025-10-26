@@ -39,16 +39,12 @@ async def session_idle_timeout(
         # Check every 30 seconds
         await asyncio.sleep(30)
 
-        if not session_manager.has_active_session():
+        if session_manager.current_session is None:
             continue
 
         # Check time since last crank event
         current_time_ms = ticks_ms()
         last_event_ms = state.telemetry_manager.crank_telemetry.last_physical_time_ms
-
-        # Handle the case where no events have happened yet
-        if last_event_ms == 0:
-            continue
 
         elapsed_ms = ticks_diff(current_time_ms, last_event_ms)
 
@@ -64,6 +60,7 @@ async def session_periodic_save(
 
     Saves the current session every config.save_interval_s seconds without ending it.
     This ensures that session data is preserved even if the device loses power.
+    Only saves sessions that meet the minimum duration requirement.
 
     Args:
         session_manager: SessionManager instance to save sessions.
@@ -73,9 +70,9 @@ async def session_periodic_save(
     while True:
         await asyncio.sleep(config.session_save_interval_s)
 
-        if session_manager.has_active_session():
-            log("Periodic save triggered")
-            session_manager.save_current_session()
+        log("Periodic save triggered")
+
+        session_manager.maybe_save_current_session()
 
 
 async def ble_advertise(device_name: str, services: t.Sequence[UUID]) -> None:

@@ -8,8 +8,8 @@ import typing as t
 from udataclasses import dataclass, field
 
 from config import config
-from models import Session, SessionStore, CrankTelemetry
-from storage import read_session_store, write_session_store
+from models import Session, CrankTelemetry
+from storage import save_session
 from utils import log
 
 
@@ -40,15 +40,12 @@ class TelemetryManager:
 class SessionManager:
     """Manages cycling session lifecycle and persistence.
 
-    Tracks the currently active session (if any) and maintains the session store.
+    Tracks the currently active session (if any). Sessions are stored as
+    individual files in the sessions directory, with lazy loading on demand.
 
     Attributes:
-        store: Persistent session store.
         current_session: Currently active session, if any.
     """
-    store: SessionStore = field(
-        default_factory=lambda: read_session_store(config.sessions_file)
-    )
     current_session: t.Optional[Session] = None
 
     def start_session(self) -> Session:
@@ -85,28 +82,14 @@ class SessionManager:
             log("No active session to end")
             return None
 
-        # Calculate duration
-        duration_s = self.current_session.end_time - self.current_session.start_time
-
-        # Discard sessions shorter than minimum duration
-        if duration_s < config.session_min_duration_s:
-            log(f"Discarded short session {self.current_session.start_time}: "
-                f"{self.current_session.revolutions} revolutions, "
-                f"duration={duration_s}s (< {config.session_min_duration_s}s minimum)")
-            self.current_session = None
-            return None
-
-        # Add to store
-        self.store.sessions.append(self.current_session)
-
-        # Save to disk
-        write_session_store(self.store, config.sessions_file)
+        # Save final state to disk
+        self.maybe_save_current_session()
 
         log(f"Ended session {self.current_session.start_time}: "
-            f"{self.current_session.revolutions} revolutions, "
-            f"duration={duration_s}s")
+            f"{self.current_session.revolutions} revolutions, ")
 
         ended_session = self.current_session
+
         self.current_session = None
 
         return ended_session
@@ -122,66 +105,39 @@ class SessionManager:
         session.end_time = int(time.time())
         log(f"Session {session.start_time}: revolution {session.revolutions}")
 
-    def save_current_session(self) -> bool:
-        """Save the current active session without ending it.
+    def maybe_save_current_session(self) -> bool:
+        """Save the current active session if conditions are met.
 
         This is for periodic persistence of active sessions to prevent
-        data loss on unexpected shutdown.
+        data loss on unexpected shutdown. Only saves if:
+        - There is an active session
+        - Session meets minimum duration requirement
 
         Returns:
-            True if save successful, False otherwise.
+            True if save successful or no save needed, False on error.
         """
         if self.current_session is None:
-            return True  # Nothing to save
+            return True  # No active session
 
         # Update end time
         self.current_session.end_time = int(time.time())
 
-        # Create a temporary store with just the current session
-        # We append it temporarily, save, then remove it
-        self.store.sessions.append(self.current_session)
-        success = write_session_store(self.store, config.sessions_file)
-        self.store.sessions.pop()  # Remove it (not truly ended yet)
+        # Calculate duration
+        duration_s = self.current_session.end_time - self.current_session.start_time
 
-        if success:
-            log(f"Saved active session {self.current_session.start_time} "
-                f"({self.current_session.revolutions} revs)")
-        else:
+        # Don't save if session hasn't met minimum duration yet
+        if duration_s < config.session_min_duration_s:
+            log(f"Skipping save of short session {self.current_session.start_time}: "
+                f"duration={duration_s}s (< {config.session_min_duration_s}s minimum)")
+            return True  # Not an error, just too short
+
+        # Save to its own file
+        success = save_session(self.current_session)
+
+        if not success:
             log(f"Failed to save active session {self.current_session.start_time}")
 
         return success
-
-    def get_sessions_since(self, start_time: int) -> list[Session]:
-        """Get all sessions that started after the given timestamp.
-
-        Returns sessions sorted by start_time in ascending order.
-
-        Args:
-            start_time: Unix timestamp. Returns sessions where s.start_time > start_time.
-
-        Returns:
-            List of sessions after the given timestamp, sorted by start_time.
-        """
-        sessions = [s for s in self.store.sessions if s.start_time > start_time]
-        sessions.sort(key=lambda s: s.start_time)
-        log(f"Found {len(sessions)} sessions since {start_time}")
-        return sessions
-
-    def has_active_session(self) -> bool:
-        """Check if there is currently an active session.
-
-        Returns:
-            True if a session is active, False otherwise.
-        """
-        return self.current_session is not None
-
-    def get_current_session(self) -> t.Optional[Session]:
-        """Get the current active session, if any.
-
-        Returns:
-            Current session or None.
-        """
-        return self.current_session
 
 
 @dataclass

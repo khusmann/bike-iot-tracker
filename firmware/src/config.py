@@ -43,7 +43,7 @@ class Config:
     session_min_duration_s: int = 5 * 60
 
     # Storage
-    sessions_file: str = "/sessions.json"  # Path to session storage file
+    sessions_dir: str = "/sessions"  # Directory for session storage files
 
 
 def _load_config(dev: bool = False) -> Config:

@@ -6,7 +6,7 @@ Defines the core data model for tracking cycling sessions.
 import json
 import typing as t
 
-from udataclasses import dataclass, field
+from udataclasses import dataclass
 
 
 @dataclass
@@ -67,46 +67,8 @@ class Session:
             revolutions=data["revolutions"],
         )
 
-
-@dataclass
-class SessionStore:
-    """Container for all sessions.
-
-    Sessions are identified by their start_time timestamp, so no separate
-    ID counter is needed.
-
-    Attributes:
-        sessions: List of all stored sessions, sorted by start_time.
-    """
-    sessions: list[Session] = field(default_factory=lambda: [])
-
-    def to_dict(self) -> dict[str, t.Any]:
-        """Convert SessionStore to dictionary for JSON serialization.
-
-        Returns:
-            Dictionary representation of session store.
-        """
-        return {
-            "sessions": [s.to_dict() for s in self.sessions],
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, t.Any]):
-        """Create SessionStore from dictionary (JSON deserialization).
-
-        Args:
-            data: Dictionary containing session store data.
-
-        Returns:
-            SessionStore instance.
-        """
-        sessions = [Session.from_dict(s) for s in data.get("sessions", [])]
-        # Sort sessions by start_time to maintain consistent ordering
-        sessions.sort(key=lambda s: s.start_time)
-        return SessionStore(sessions=sessions)
-
     def to_json(self) -> str:
-        """Serialize SessionStore to JSON string.
+        """Serialize Session to JSON string.
 
         Returns:
             JSON string representation.
@@ -115,13 +77,13 @@ class SessionStore:
 
     @classmethod
     def from_json(cls, json_str: str):
-        """Deserialize SessionStore from JSON string.
+        """Deserialize Session from JSON string.
 
         Args:
             json_str: JSON string to deserialize.
 
         Returns:
-            SessionStore instance.
+            Session instance.
         """
         data = json.loads(json_str)
-        return SessionStore.from_dict(data)
+        return Session.from_dict(data)

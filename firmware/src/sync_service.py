@@ -14,6 +14,11 @@ Key features:
 - Multi-client safe: each client independently syncs from their last timestamp
 - No server-side sync state: clients manage their own progress
 - Survives storage resets: new sessions always have later timestamps
+
+TODO: Add delete/cleanup protocol
+- Sessions are currently kept indefinitely on the device
+- Future: Add characteristic for client to confirm sync and trigger cleanup
+- This will prevent flash wear from accumulating old session files
 """
 import asyncio
 import json
@@ -25,6 +30,7 @@ import bluetooth
 
 from models import Session
 from state import SessionManager
+from storage import load_sessions_since
 from utils import log, unix_to_micropython_timestamp, micropython_to_unix_timestamp
 
 
@@ -189,7 +195,7 @@ def process_session_data_request(
     log(f"Session Data request since {last_synced}")
 
     # Query sessions
-    sessions = session_manager.get_sessions_since(last_synced)
+    sessions = load_sessions_since(last_synced)
 
     # Build response dict
     response_dict = build_sync_response_dict(sessions)
