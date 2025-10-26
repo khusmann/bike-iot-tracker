@@ -11,6 +11,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import android.content.Context
+import android.os.PowerManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -305,15 +307,17 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
 
     var syncState by remember { mutableStateOf(loadSyncState(syncPrefs)) }
     var healthConnectTimestamp by remember { mutableStateOf(0L) }
-    // Note: Using SharedPreferences for now - ideally should query WorkManager
-    // but that requires Guava dependencies which complicate the build
     var syncEnabled by remember { mutableStateOf(syncPrefs.syncEnabled) }
+    var isBatteryOptimizationDisabled by remember { mutableStateOf(false) }
 
     // Refresh sync state and query HealthConnect periodically
     LaunchedEffect(Unit) {
         while (true) {
             syncState = loadSyncState(syncPrefs)
             syncEnabled = syncPrefs.syncEnabled
+
+            // Check battery optimization status
+            isBatteryOptimizationDisabled = isBatteryOptimizationDisabled(context)
 
             // Query HealthConnect for last synced timestamp (async)
             if (healthConnectAvailable && syncPrefs.lastSyncedDeviceAddress != null) {
@@ -434,7 +438,7 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Show sync interval - value from SyncScheduler constant
+        // Show sync interval - value from constant
         val intervalText = if (syncEnabled) {
             "${SyncScheduler.SYNC_INTERVAL_MINUTES} minutes"
         } else {
@@ -456,8 +460,8 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Battery optimization warning
-        if (syncEnabled) {
+        // Battery optimization warning - only show if battery optimization is NOT disabled
+        if (syncEnabled && !isBatteryOptimizationDisabled) {
             Text(
                 text = "Note: For reliable background sync, disable battery optimization for this app in Android Settings → Apps → Bike Tracker → Battery → Unrestricted",
                 style = MaterialTheme.typography.bodySmall,
@@ -627,4 +631,14 @@ fun MetricCard(label: String, value: String, unit: String) {
             )
         }
     }
+}
+
+/**
+ * Check if battery optimization is disabled for this app
+ *
+ * @return true if battery optimization is disabled (app is unrestricted), false otherwise
+ */
+fun isBatteryOptimizationDisabled(context: Context): Boolean {
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+    return powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: false
 }
