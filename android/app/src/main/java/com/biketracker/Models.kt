@@ -62,24 +62,28 @@ sealed class SyncStatus {
 /**
  * Sync state for the sync settings tab
  *
+ * Note: syncEnabled and syncIntervalMinutes are NOT stored here
+ * - syncEnabled: managed by WorkManager directly
+ * - syncIntervalMinutes: hardcoded in SyncScheduler (15 min for testing)
+ *
  * @property lastSyncStatus Status of the last sync attempt
  * @property lastSyncedSessionId Unix timestamp of the last synced session
  * @property syncSuccessCount Total number of successful syncs
  * @property syncFailureCount Total number of failed syncs
- * @property syncEnabled Whether periodic sync is enabled
- * @property syncIntervalMinutes Sync interval in minutes
  * @property lastSyncedDeviceAddress Bluetooth address of last synced device
  * @property healthConnectTimestamp Last sync timestamp from HealthConnect (for comparison)
+ * @property targetDeviceAddress Target device address for sync (null = any device)
+ * @property targetDeviceName Target device name for display
  */
 data class SyncState(
     val lastSyncStatus: SyncStatus = SyncStatus.NeverSynced,
     val lastSyncedSessionId: Long = 0L,
     val syncSuccessCount: Int = 0,
     val syncFailureCount: Int = 0,
-    val syncEnabled: Boolean = false,
-    val syncIntervalMinutes: Int = 60,
     val lastSyncedDeviceAddress: String? = null,
-    val healthConnectTimestamp: Long = 0L
+    val healthConnectTimestamp: Long = 0L,
+    val targetDeviceAddress: String? = null,
+    val targetDeviceName: String? = null
 )
 
 /**

@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -58,12 +60,6 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalPermissionsApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Check if sync is enabled in preferences and schedule if needed
-        val syncPrefs = SyncPreferences(applicationContext)
-        if (syncPrefs.syncEnabled) {
-            SyncScheduler.schedulePeriodicSync(applicationContext)
-        }
 
         setContent {
             BikeTrackerTheme {
@@ -309,11 +305,15 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
 
     var syncState by remember { mutableStateOf(loadSyncState(syncPrefs)) }
     var healthConnectTimestamp by remember { mutableStateOf(0L) }
+    // Note: Using SharedPreferences for now - ideally should query WorkManager
+    // but that requires Guava dependencies which complicate the build
+    var syncEnabled by remember { mutableStateOf(syncPrefs.syncEnabled) }
 
     // Refresh sync state and query HealthConnect periodically
     LaunchedEffect(Unit) {
         while (true) {
             syncState = loadSyncState(syncPrefs)
+            syncEnabled = syncPrefs.syncEnabled
 
             // Query HealthConnect for last synced timestamp (async)
             if (healthConnectAvailable && syncPrefs.lastSyncedDeviceAddress != null) {
@@ -334,7 +334,8 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.Start
     ) {
@@ -418,22 +419,28 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
         ) {
             Text("Periodic sync enabled:")
             androidx.compose.material3.Switch(
-                checked = syncState.syncEnabled,
+                checked = syncEnabled,
                 onCheckedChange = { enabled ->
-                    syncPrefs.syncEnabled = enabled
+                    syncPrefs.syncEnabled = enabled  // Keep SharedPreferences in sync
                     if (enabled) {
                         SyncScheduler.schedulePeriodicSync(context)
                     } else {
                         SyncScheduler.cancelPeriodicSync(context)
                     }
-                    syncState = loadSyncState(syncPrefs)
+                    // syncEnabled will be updated by LaunchedEffect on next iteration
                 }
             )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        SyncInfoRow("Sync interval:", "${syncState.syncIntervalMinutes} minutes")
+        // Show sync interval - value from SyncScheduler constant
+        val intervalText = if (syncEnabled) {
+            "${SyncScheduler.SYNC_INTERVAL_MINUTES} minutes"
+        } else {
+            "Not scheduled"
+        }
+        SyncInfoRow("Sync interval:", intervalText)
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -445,6 +452,18 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Sync Now")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Battery optimization warning
+        if (syncEnabled) {
+            Text(
+                text = "Note: For reliable background sync, disable battery optimization for this app in Android Settings → Apps → Bike Tracker → Battery → Unrestricted",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(8.dp)
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -537,10 +556,10 @@ fun loadSyncState(syncPrefs: SyncPreferences): SyncState {
         lastSyncedSessionId = syncPrefs.lastSyncedSessionId,
         syncSuccessCount = syncPrefs.syncSuccessCount,
         syncFailureCount = syncPrefs.syncFailureCount,
-        syncEnabled = syncPrefs.syncEnabled,
-        syncIntervalMinutes = syncPrefs.syncIntervalMinutes,
         lastSyncedDeviceAddress = syncPrefs.lastSyncedDeviceAddress,
-        healthConnectTimestamp = 0L // Not used anymore - queried separately in SyncTab
+        healthConnectTimestamp = 0L, // Not used anymore - queried separately in SyncTab
+        targetDeviceAddress = syncPrefs.targetDeviceAddress,
+        targetDeviceName = syncPrefs.targetDeviceName
     )
 }
 

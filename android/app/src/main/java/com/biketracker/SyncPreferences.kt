@@ -28,6 +28,8 @@ class SyncPreferences(context: Context) {
         private const val KEY_LAST_SYNCED_DEVICE_ADDRESS = "last_synced_device_address"
         private const val KEY_SYNC_INTERVAL_MINUTES = "sync_interval_minutes"
         private const val KEY_SYNC_ENABLED = "sync_enabled"
+        private const val KEY_TARGET_DEVICE_ADDRESS = "target_device_address"
+        private const val KEY_TARGET_DEVICE_NAME = "target_device_name"
     }
 
     /**
@@ -81,17 +83,39 @@ class SyncPreferences(context: Context) {
 
     /**
      * Sync interval in minutes (default: 60 minutes)
+     *
+     * Note: This is deprecated and not used. The actual sync interval
+     * is hardcoded in SyncScheduler.kt (15 minutes for testing).
+     * Kept for backwards compatibility with existing preferences.
      */
+    @Deprecated("Sync interval is hardcoded in SyncScheduler, this value is not used")
     var syncIntervalMinutes: Int
         get() = prefs.getInt(KEY_SYNC_INTERVAL_MINUTES, 60)
         set(value) = prefs.edit().putInt(KEY_SYNC_INTERVAL_MINUTES, value).apply()
 
     /**
      * Whether periodic sync is enabled (default: false)
+     *
+     * Note: This is deprecated - use SyncScheduler.isSyncScheduled() instead
+     * which queries WorkManager directly for the actual sync state
      */
     var syncEnabled: Boolean
         get() = prefs.getBoolean(KEY_SYNC_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_SYNC_ENABLED, value).apply()
+
+    /**
+     * Target device Bluetooth address for sync (null if no specific device targeted)
+     */
+    var targetDeviceAddress: String?
+        get() = prefs.getString(KEY_TARGET_DEVICE_ADDRESS, null)
+        set(value) = prefs.edit().putString(KEY_TARGET_DEVICE_ADDRESS, value).apply()
+
+    /**
+     * Target device name for display (null if no specific device targeted)
+     */
+    var targetDeviceName: String?
+        get() = prefs.getString(KEY_TARGET_DEVICE_NAME, null)
+        set(value) = prefs.edit().putString(KEY_TARGET_DEVICE_NAME, value).apply()
 
     /**
      * Record a successful sync
