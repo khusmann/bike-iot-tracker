@@ -21,8 +21,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -338,8 +336,7 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(24.dp),
         verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.Start
     ) {
@@ -350,18 +347,6 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        // HealthConnect status
-        Text(
-            text = "HealthConnect: ${if (healthConnectAvailable) "Available" else "Not Available"}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (healthConnectAvailable)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.error
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
 
         // Last Sync Info Section
         Text(
@@ -499,21 +484,53 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
                     "0"
                 }
             )
-            SyncInfoRow("HealthConnect last:",
-                if (healthConnectTimestamp > 0) {
-                    healthConnectTimestamp.toString()
-                } else {
-                    "0"
-                }
-            )
 
-            if (syncState.lastSyncedSessionId > healthConnectTimestamp && syncState.lastSyncedSessionId > 0) {
+            // Display HealthConnect row with warning if needed
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text(
-                    text = "WARNING: Local state is newer than HealthConnect. HealthConnect data may have been cleared.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    text = "HealthConnect last:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                if (!healthConnectAvailable) {
+                    // HealthConnect not available
+                    Text(
+                        text = "Not available",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    // HealthConnect available - show timestamp with potential warning
+                    val hasDataMismatch = syncState.lastSyncedSessionId > healthConnectTimestamp && syncState.lastSyncedSessionId > 0
+                    val healthConnectValue = if (healthConnectTimestamp > 0) {
+                        healthConnectTimestamp.toString()
+                    } else {
+                        "0"
+                    }
+
+                    Row {
+                        if (hasDataMismatch) {
+                            Text(
+                                text = "\u26A0 ",  // Unicode warning sign
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        Text(
+                            text = healthConnectValue,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
         }
     }
