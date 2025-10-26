@@ -307,13 +307,27 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
     val syncPrefs = remember { SyncPreferences(context) }
     val healthConnectHelper = remember { HealthConnectHelper(context) }
 
-    var syncState by remember { mutableStateOf(loadSyncState(context, syncPrefs, healthConnectHelper)) }
+    var syncState by remember { mutableStateOf(loadSyncState(syncPrefs)) }
+    var healthConnectTimestamp by remember { mutableStateOf(0L) }
 
-    // Refresh sync state periodically
+    // Refresh sync state and query HealthConnect periodically
     LaunchedEffect(Unit) {
         while (true) {
+            syncState = loadSyncState(syncPrefs)
+
+            // Query HealthConnect for last synced timestamp (async)
+            if (healthConnectAvailable && syncPrefs.lastSyncedDeviceAddress != null) {
+                try {
+                    healthConnectTimestamp = healthConnectHelper.getLastSyncedTimestamp(
+                        syncPrefs.lastSyncedDeviceAddress!!
+                    )
+                } catch (e: Exception) {
+                    Log.e("SyncTab", "Error querying HealthConnect: ${e.message}", e)
+                    healthConnectTimestamp = 0L
+                }
+            }
+
             kotlinx.coroutines.delay(1000) // Refresh every second
-            syncState = loadSyncState(context, syncPrefs, healthConnectHelper)
         }
     }
 
@@ -412,7 +426,7 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
                     } else {
                         SyncScheduler.cancelPeriodicSync(context)
                     }
-                    syncState = loadSyncState(context, syncPrefs, healthConnectHelper)
+                    syncState = loadSyncState(syncPrefs)
                 }
             )
         }
@@ -448,7 +462,7 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
         SyncInfoRow("Failed syncs:", syncState.syncFailureCount.toString())
 
         // HealthConnect vs SharedPreferences comparison
-        if (syncState.lastSyncedSessionId > 0 || syncState.healthConnectTimestamp > 0) {
+        if (syncState.lastSyncedSessionId > 0 || healthConnectTimestamp > 0) {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = "Data Integrity Check",
@@ -463,14 +477,14 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
                 }
             )
             SyncInfoRow("HealthConnect last:",
-                if (syncState.healthConnectTimestamp > 0) {
-                    syncState.healthConnectTimestamp.toString()
+                if (healthConnectTimestamp > 0) {
+                    healthConnectTimestamp.toString()
                 } else {
                     "0"
                 }
             )
 
-            if (syncState.lastSyncedSessionId > syncState.healthConnectTimestamp && syncState.lastSyncedSessionId > 0) {
+            if (syncState.lastSyncedSessionId > healthConnectTimestamp && syncState.lastSyncedSessionId > 0) {
                 Text(
                     text = "WARNING: Local state is newer than HealthConnect. HealthConnect data may have been cleared.",
                     style = MaterialTheme.typography.bodySmall,
@@ -503,7 +517,7 @@ fun SyncInfoRow(label: String, value: String) {
     }
 }
 
-fun loadSyncState(context: android.content.Context, syncPrefs: SyncPreferences, healthConnectHelper: HealthConnectHelper): SyncState {
+fun loadSyncState(syncPrefs: SyncPreferences): SyncState {
     // Determine sync status
     val lastSyncStatus = when {
         syncPrefs.lastSyncSuccessTimestamp == 0L && syncPrefs.lastSyncAttemptTimestamp == 0L -> {
@@ -518,14 +532,6 @@ fun loadSyncState(context: android.content.Context, syncPrefs: SyncPreferences, 
         }
     }
 
-    // Try to get HealthConnect timestamp (on background thread in real app, but simplified here)
-    val healthConnectTimestamp = try {
-        // This is a simplified synchronous call for demo - in production should be async
-        0L // Will be updated by LaunchedEffect if needed
-    } catch (e: Exception) {
-        0L
-    }
-
     return SyncState(
         lastSyncStatus = lastSyncStatus,
         lastSyncedSessionId = syncPrefs.lastSyncedSessionId,
@@ -534,7 +540,7 @@ fun loadSyncState(context: android.content.Context, syncPrefs: SyncPreferences, 
         syncEnabled = syncPrefs.syncEnabled,
         syncIntervalMinutes = syncPrefs.syncIntervalMinutes,
         lastSyncedDeviceAddress = syncPrefs.lastSyncedDeviceAddress,
-        healthConnectTimestamp = healthConnectTimestamp
+        healthConnectTimestamp = 0L // Not used anymore - queried separately in SyncTab
     )
 }
 
