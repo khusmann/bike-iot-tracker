@@ -123,20 +123,12 @@ class BackgroundSyncWorker(
 
         Log.d(TAG, "Found bike tracker: ${device.device.name}")
 
-        // Get last synced timestamp from HealthConnect
+        // Get last synced timestamp from HealthConnect (single source of truth)
         val healthConnect = HealthConnectHelper(applicationContext)
         val lastSyncedTimestamp = healthConnect.getLastSyncedTimestamp(device.device.address)
         Log.d(TAG, "Last synced timestamp from HealthConnect: $lastSyncedTimestamp")
 
-        // Check SharedPreferences timestamp for diagnostic purposes
         val syncPrefs = SyncPreferences(applicationContext)
-        val localLastSyncedSessionId = syncPrefs.lastSyncedSessionId
-        Log.d(TAG, "Last synced session ID from local storage: $localLastSyncedSessionId")
-
-        // Detect potential HealthConnect data loss
-        if (localLastSyncedSessionId > lastSyncedTimestamp && localLastSyncedSessionId > 0) {
-            Log.w(TAG, "WARNING: Local sync state ($localLastSyncedSessionId) is newer than HealthConnect ($lastSyncedTimestamp). HealthConnect data may have been cleared.")
-        }
 
         // Connect to device and sync
         var gatt: BluetoothGatt? = null
@@ -295,10 +287,7 @@ class BackgroundSyncWorker(
 
                                     // Record successful sync if we synced any sessions
                                     if (sessionsSynced > 0) {
-                                        syncPrefs.recordSyncSuccess(
-                                            device.device.address,
-                                            currentLastSyncedTimestamp
-                                        )
+                                        syncPrefs.recordSyncSuccess(device.device.address)
                                         Log.d(TAG, "Recorded successful sync to local storage")
                                     }
 

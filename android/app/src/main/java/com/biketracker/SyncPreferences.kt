@@ -21,7 +21,6 @@ class SyncPreferences(context: Context) {
         // Keys
         private const val KEY_LAST_SYNC_SUCCESS_TIMESTAMP = "last_sync_success_timestamp"
         private const val KEY_LAST_SYNC_ATTEMPT_TIMESTAMP = "last_sync_attempt_timestamp"
-        private const val KEY_LAST_SYNCED_SESSION_ID = "last_synced_session_id"
         private const val KEY_SYNC_SUCCESS_COUNT = "sync_success_count"
         private const val KEY_SYNC_FAILURE_COUNT = "sync_failure_count"
         private const val KEY_LAST_ERROR_MESSAGE = "last_error_message"
@@ -44,13 +43,6 @@ class SyncPreferences(context: Context) {
     var lastSyncAttemptTimestamp: Long
         get() = prefs.getLong(KEY_LAST_SYNC_ATTEMPT_TIMESTAMP, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_SYNC_ATTEMPT_TIMESTAMP, value).apply()
-
-    /**
-     * Last synced session ID (Unix timestamp from bike firmware)
-     */
-    var lastSyncedSessionId: Long
-        get() = prefs.getLong(KEY_LAST_SYNCED_SESSION_ID, 0L)
-        set(value) = prefs.edit().putLong(KEY_LAST_SYNCED_SESSION_ID, value).apply()
 
     /**
      * Total number of successful syncs
@@ -104,12 +96,11 @@ class SyncPreferences(context: Context) {
     /**
      * Record a successful sync
      */
-    fun recordSyncSuccess(deviceAddress: String, sessionId: Long) {
+    fun recordSyncSuccess(deviceAddress: String) {
         val now = System.currentTimeMillis()
         prefs.edit().apply {
             putLong(KEY_LAST_SYNC_SUCCESS_TIMESTAMP, now)
             putLong(KEY_LAST_SYNC_ATTEMPT_TIMESTAMP, now)
-            putLong(KEY_LAST_SYNCED_SESSION_ID, sessionId)
             putString(KEY_LAST_SYNCED_DEVICE_ADDRESS, deviceAddress)
             putInt(KEY_SYNC_SUCCESS_COUNT, syncSuccessCount + 1)
             putString(KEY_LAST_ERROR_MESSAGE, null)

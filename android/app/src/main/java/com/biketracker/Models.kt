@@ -66,21 +66,17 @@ sealed class SyncStatus {
  * Note: syncInterval is NOT stored here - it's a constant in SyncScheduler
  *
  * @property lastSyncStatus Status of the last sync attempt
- * @property lastSyncedSessionId Unix timestamp of the last synced session
  * @property syncSuccessCount Total number of successful syncs
  * @property syncFailureCount Total number of failed syncs
  * @property lastSyncedDeviceAddress Bluetooth address of last synced device
- * @property healthConnectTimestamp Last sync timestamp from HealthConnect (for comparison)
  * @property targetDeviceAddress Target device address for sync (null = any device)
  * @property targetDeviceName Target device name for display
  */
 data class SyncState(
     val lastSyncStatus: SyncStatus = SyncStatus.NeverSynced,
-    val lastSyncedSessionId: Long = 0L,
     val syncSuccessCount: Int = 0,
     val syncFailureCount: Int = 0,
     val lastSyncedDeviceAddress: String? = null,
-    val healthConnectTimestamp: Long = 0L,
     val targetDeviceAddress: String? = null,
     val targetDeviceName: String? = null
 )

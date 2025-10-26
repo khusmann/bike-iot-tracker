@@ -367,7 +367,6 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
             }
             is SyncStatus.Success -> {
                 SyncInfoRow("Status:", "Success")
-                SyncInfoRow("Last successful sync:", formatTimestamp(status.timestamp))
             }
             is SyncStatus.Failed -> {
                 SyncInfoRow("Status:", "Failed")
@@ -380,13 +379,27 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
             }
         }
 
-        SyncInfoRow("Last synced session:",
-            if (syncState.lastSyncedSessionId > 0) {
-                formatUnixTimestamp(syncState.lastSyncedSessionId)
-            } else {
-                "None"
-            }
-        )
+        // Show when we last updated session data
+        val lastSessionDataUpdate = when (val status = syncState.lastSyncStatus) {
+            is SyncStatus.Success -> status.timestamp
+            else -> 0L
+        }
+        if (lastSessionDataUpdate > 0) {
+            SyncInfoRow("Last session data update:", formatTimestamp(lastSessionDataUpdate))
+        }
+
+        // Show last synced session from HealthConnect
+        if (!healthConnectAvailable) {
+            SyncInfoRow("Last synced session:", "Not available")
+        } else {
+            SyncInfoRow("Last synced session:",
+                if (healthConnectTimestamp > 0) {
+                    formatUnixTimestamp(healthConnectTimestamp)
+                } else {
+                    "None"
+                }
+            )
+        }
 
         syncState.lastSyncedDeviceAddress?.let { deviceAddress ->
             SyncInfoRow("Device:", deviceAddress)
@@ -470,71 +483,6 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
 
         SyncInfoRow("Successful syncs:", syncState.syncSuccessCount.toString())
         SyncInfoRow("Failed syncs:", syncState.syncFailureCount.toString())
-
-        // HealthConnect vs SharedPreferences comparison
-        if (syncState.lastSyncedSessionId > 0 || healthConnectTimestamp > 0) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Data Integrity Check",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
-            )
-            SyncInfoRow("Local last session:",
-                if (syncState.lastSyncedSessionId > 0) {
-                    syncState.lastSyncedSessionId.toString()
-                } else {
-                    "0"
-                }
-            )
-
-            // Display HealthConnect row with warning if needed
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "HealthConnect last:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (!healthConnectAvailable) {
-                    // HealthConnect not available
-                    Text(
-                        text = "Not available",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    // HealthConnect available - show timestamp with potential warning
-                    val hasDataMismatch = syncState.lastSyncedSessionId > healthConnectTimestamp && syncState.lastSyncedSessionId > 0
-                    val healthConnectValue = if (healthConnectTimestamp > 0) {
-                        healthConnectTimestamp.toString()
-                    } else {
-                        "0"
-                    }
-
-                    Row {
-                        if (hasDataMismatch) {
-                            Text(
-                                text = "\u26A0 ",  // Unicode warning sign
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                        Text(
-                            text = healthConnectValue,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -576,11 +524,9 @@ fun loadSyncState(syncPrefs: SyncPreferences): SyncState {
 
     return SyncState(
         lastSyncStatus = lastSyncStatus,
-        lastSyncedSessionId = syncPrefs.lastSyncedSessionId,
         syncSuccessCount = syncPrefs.syncSuccessCount,
         syncFailureCount = syncPrefs.syncFailureCount,
         lastSyncedDeviceAddress = syncPrefs.lastSyncedDeviceAddress,
-        healthConnectTimestamp = 0L, // Not used anymore - queried separately in SyncTab
         targetDeviceAddress = syncPrefs.targetDeviceAddress,
         targetDeviceName = syncPrefs.targetDeviceName
     )
