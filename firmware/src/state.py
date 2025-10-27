@@ -9,7 +9,7 @@ from udataclasses import dataclass, field
 
 from config import config
 from models import Session, CrankTelemetry
-from storage import save_session
+from storage import save_session, available_sessions, load_session
 from utils import log
 
 
@@ -138,6 +138,39 @@ class SessionManager:
             log(f"Failed to save active session {self.current_session.start_time}")
 
         return success
+
+    def load_sessions_since(self, start_time: int) -> list[Session]:
+        """Load completed sessions that started after the given timestamp.
+
+        Returns sessions where start_time > given timestamp, excluding
+        the current active session (which is still in progress).
+
+        Efficiently filters by timestamp before loading session data.
+
+        Args:
+            start_time: Unix timestamp. Returns sessions started after this time.
+
+        Returns:
+            List of completed sessions, sorted by start_time.
+        """
+        # Get available session IDs (lightweight, just filenames)
+        session_ids = available_sessions()
+
+        # Filter by timestamp and exclude current active session
+        current_start_time = self.current_session.start_time if self.current_session else None
+
+        filtered_ids = [
+            sid for sid in session_ids
+            if sid > start_time and sid != current_start_time
+        ]
+
+        # Load the filtered sessions
+        loaded_sessions = [load_session(sid) for sid in filtered_ids]
+
+        # Filter out any that failed to load
+        sessions = [s for s in loaded_sessions if s is not None]
+
+        return sessions
 
 
 @dataclass

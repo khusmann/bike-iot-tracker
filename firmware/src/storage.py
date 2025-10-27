@@ -5,6 +5,7 @@ Handles persistent storage of sessions to the ESP32 filesystem with
 atomic write operations for data integrity. Each session is stored as
 a separate JSON file named by its start_time timestamp.
 """
+import typing as t
 import uos
 from models import Session
 from utils import log, atomic_write
@@ -53,19 +54,16 @@ def save_session(session: Session) -> bool:
         return False
 
 
-def load_sessions_since(start_time: int) -> list[Session]:
-    """Load all sessions that started after the given timestamp.
+def available_sessions() -> list[int]:
+    """Get list of available session start times from filesystem.
 
-    Lazy loads only matching sessions from the filesystem.
-
-    Args:
-        start_time: Unix timestamp. Returns sessions where s.start_time > start_time.
-        sessions_dir: Directory path containing session files.
+    Returns session IDs (start_time values) by reading filenames only,
+    without loading the full session data.
 
     Returns:
-        List of sessions after the given timestamp, sorted by start_time.
+        List of session start_time values, sorted chronologically.
     """
-    sessions: list[Session] = []
+    session_ids: list[int] = []
 
     try:
         files = uos.listdir(config.sessions_dir)
@@ -81,24 +79,32 @@ def load_sessions_since(start_time: int) -> list[Session]:
         try:
             # Extract start_time from filename
             session_start_time = int(filename.replace('.json', ''))
-
-            # Skip if not in range
-            if session_start_time <= start_time:
-                continue
-
-            # Load the session file
-            filepath = f"{config.sessions_dir}/{filename}"
-            with open(filepath, 'r') as f:
-                json_str = f.read()
-
-            session = Session.from_json(json_str)
-            sessions.append(session)
-
-        except (ValueError, OSError) as e:
-            log(f"Error loading session file {filename}: {e}")
+            session_ids.append(session_start_time)
+        except ValueError as e:
+            log(f"Invalid session filename {filename}: {e}")
             continue
 
-    # Sort by start_time
-    sessions.sort(key=lambda s: s.start_time)
-    log(f"Loaded {len(sessions)} sessions since {start_time}")
-    return sessions
+    session_ids.sort()
+    return session_ids
+
+
+def load_session(start_time: int) -> t.Optional[Session]:
+    """Load a single session by its start_time.
+
+    Args:
+        start_time: The session's start_time (used as unique identifier).
+
+    Returns:
+        The Session object, or None if not found or error loading.
+    """
+    try:
+        filepath = f"{config.sessions_dir}/{start_time}.json"
+        with open(filepath, 'r') as f:
+            json_str = f.read()
+
+        session = Session.from_json(json_str)
+        return session
+
+    except (OSError, ValueError) as e:
+        log(f"Error loading session {start_time}: {e}")
+        return None

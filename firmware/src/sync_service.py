@@ -30,7 +30,6 @@ import bluetooth
 
 from models import Session
 from state import SessionManager
-from storage import load_sessions_since
 from utils import log, unix_to_micropython_timestamp, micropython_to_unix_timestamp
 
 
@@ -195,8 +194,8 @@ def process_session_data_request(
 
     log(f"Session Data request since {last_synced}")
 
-    # Query sessions
-    sessions = load_sessions_since(last_synced)
+    # Query completed sessions (automatically excludes current active session)
+    sessions = session_manager.load_sessions_since(last_synced)
 
     # Build response dict
     response_dict = build_sync_response_dict(sessions)
