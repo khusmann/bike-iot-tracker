@@ -331,7 +331,7 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
                 }
             }
 
-            kotlinx.coroutines.delay(20_000) // Refresh every 20 seconds to update relative timestamps
+            kotlinx.coroutines.delay(1000) // Refresh every second to update relative timestamps
         }
     }
 
