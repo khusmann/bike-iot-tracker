@@ -119,9 +119,6 @@ class SessionManager:
         if self.current_session is None:
             return True  # No active session
 
-        # Update end time
-        self.current_session.end_time = int(time.time())
-
         # Calculate duration
         duration_s = self.current_session.end_time - self.current_session.start_time
 
