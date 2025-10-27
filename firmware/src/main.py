@@ -19,6 +19,9 @@ async def on_reed_press(state: AppState, led: t.Optional[Pin]) -> None:
     Updates telemetry on crank rotation, records revolution in session manager,
     and provides visual feedback via LED toggle.
 
+    TODO: This should be replaced with an interrupt, because the primitives.pushbutton
+    can miss revolutions when pedaling too fast.
+
     Args:
         state: Application state containing telemetry and session managers.
     """
