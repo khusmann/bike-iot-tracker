@@ -124,14 +124,13 @@ def session_to_unix_dict(session: Session) -> t.Dict[str, t.Any]:
         session: Session to convert
 
     Returns:
-        Dictionary with timestamps converted to Unix epoch (1970) and version field
+        Dictionary with timestamps converted to Unix epoch (1970)
     """
     session_dict = session.to_dict()
     return {
         "start_time": micropython_to_unix_timestamp(session_dict["start_time"]),
         "end_time": micropython_to_unix_timestamp(session_dict["end_time"]),
         "revolutions": session_dict["revolutions"],
-        "version": session_dict["version"],
     }
 
 

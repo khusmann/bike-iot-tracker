@@ -16,12 +16,9 @@ def save_session(session: Session) -> bool:
     """Save a session to its own JSON file using atomic write.
 
     Session is saved to {sessions_dir}/{start_time}.json.
-    The session's version is incremented before each save to support
-    HealthConnect upsert functionality.
 
     Args:
         session: Session to save.
-        sessions_dir: Directory path for session files.
 
     Returns:
         True if save successful, False otherwise.
@@ -34,9 +31,6 @@ def save_session(session: Session) -> bool:
         except OSError:
             pass  # Directory already exists
 
-        # Increment version before saving
-        session.version += 1
-
         # Serialize to JSON
         json_str = session.to_json()
 
@@ -45,7 +39,7 @@ def save_session(session: Session) -> bool:
         success = atomic_write(filename, json_str)
 
         if success:
-            log(f"Saved session {session.start_time} ({session.revolutions} revs, v{session.version})")
+            log(f"Saved session {session.start_time} ({session.revolutions} revs)")
 
         return success
 
