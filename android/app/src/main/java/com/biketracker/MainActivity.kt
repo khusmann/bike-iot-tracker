@@ -70,7 +70,8 @@ class MainActivity : ComponentActivity() {
                     // HealthConnect permission setup
                     val healthConnectPermissions = setOf(
                         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-                        HealthPermission.getWritePermission(ExerciseSessionRecord::class)
+                        HealthPermission.getWritePermission(ExerciseSessionRecord::class),
+                        "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
                     )
 
                     // Check if HealthConnect is available
