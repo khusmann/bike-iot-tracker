@@ -285,11 +285,9 @@ class BackgroundSyncWorker(
                                     // A3.4: No more sessions, sync complete
                                     Log.d(TAG, "Sync complete - $sessionsSynced sessions synced")
 
-                                    // Record successful sync if we synced any sessions
-                                    if (sessionsSynced > 0) {
-                                        syncPrefs.recordSyncSuccess(device.device.address)
-                                        Log.d(TAG, "Recorded successful sync to local storage")
-                                    }
+                                    // Record successful sync (even if 0 sessions - still a successful connection)
+                                    syncPrefs.recordSyncSuccess(device.device.address)
+                                    Log.d(TAG, "Recorded successful sync to local storage")
 
                                     gatt.disconnect()
                                     resumeOnce(continuation, true)
