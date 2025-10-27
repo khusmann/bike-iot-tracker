@@ -289,6 +289,12 @@ class BackgroundSyncWorker(
                                     syncPrefs.recordSyncSuccess(device.device.address)
                                     Log.d(TAG, "Recorded successful sync to local storage")
 
+                                    // Update last session data update timestamp if we synced any sessions
+                                    if (sessionsSynced > 0) {
+                                        syncPrefs.lastSessionDataUpdateTimestamp = System.currentTimeMillis()
+                                        Log.d(TAG, "Updated last session data update timestamp")
+                                    }
+
                                     gatt.disconnect()
                                     resumeOnce(continuation, true)
                                     return

@@ -379,14 +379,15 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
             }
         }
 
-        // Show when we last updated session data
-        val lastSessionDataUpdate = when (val status = syncState.lastSyncStatus) {
-            is SyncStatus.Success -> status.timestamp
-            else -> 0L
-        }
-        if (lastSessionDataUpdate > 0) {
-            SyncInfoRow("Last session data update:", formatTimestamp(lastSessionDataUpdate))
-        }
+        // Show when we last updated session data (only when sessions were actually synced)
+        val lastSessionDataUpdate = syncPrefs.lastSessionDataUpdateTimestamp
+        SyncInfoRow("Last session data update:",
+            if (lastSessionDataUpdate > 0) {
+                formatTimestamp(lastSessionDataUpdate)
+            } else {
+                "Never"
+            }
+        )
 
         // Show last synced session from HealthConnect
         if (!healthConnectAvailable) {

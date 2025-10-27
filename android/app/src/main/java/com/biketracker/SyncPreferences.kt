@@ -28,6 +28,7 @@ class SyncPreferences(context: Context) {
         private const val KEY_SYNC_ENABLED = "sync_enabled"
         private const val KEY_TARGET_DEVICE_ADDRESS = "target_device_address"
         private const val KEY_TARGET_DEVICE_NAME = "target_device_name"
+        private const val KEY_LAST_SESSION_DATA_UPDATE_TIMESTAMP = "last_session_data_update_timestamp"
     }
 
     /**
@@ -92,6 +93,13 @@ class SyncPreferences(context: Context) {
     var targetDeviceName: String?
         get() = prefs.getString(KEY_TARGET_DEVICE_NAME, null)
         set(value) = prefs.edit().putString(KEY_TARGET_DEVICE_NAME, value).apply()
+
+    /**
+     * Last time session data was actually synced (non-zero sessions)
+     */
+    var lastSessionDataUpdateTimestamp: Long
+        get() = prefs.getLong(KEY_LAST_SESSION_DATA_UPDATE_TIMESTAMP, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_SESSION_DATA_UPDATE_TIMESTAMP, value).apply()
 
     /**
      * Record a successful sync
