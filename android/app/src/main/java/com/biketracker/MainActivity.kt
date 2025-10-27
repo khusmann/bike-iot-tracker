@@ -70,8 +70,7 @@ class MainActivity : ComponentActivity() {
                     // HealthConnect permission setup
                     val healthConnectPermissions = setOf(
                         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-                        HealthPermission.getWritePermission(ExerciseSessionRecord::class),
-                        "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
+                        HealthPermission.getWritePermission(ExerciseSessionRecord::class)
                     )
 
                     // Check if HealthConnect is available
@@ -305,22 +304,24 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
     val healthConnectHelper = remember { HealthConnectHelper(context) }
 
     var syncState by remember { mutableStateOf(loadSyncState(syncPrefs)) }
-    var healthConnectTimestamp by remember { mutableStateOf(0L) }
     var syncEnabled by remember { mutableStateOf(syncPrefs.syncEnabled) }
     var isBatteryOptimizationDisabled by remember { mutableStateOf(false) }
     var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    var healthConnectTimestamp by remember { mutableStateOf<Long?>(null) }
+    var lastSyncedSessionTimestamp by remember { mutableStateOf(syncPrefs.lastSyncedSessionTimestamp) }
 
-    // Refresh sync state and query HealthConnect periodically
+    // Refresh sync state and query HealthConnect when in foreground
     LaunchedEffect(Unit) {
         while (true) {
             syncState = loadSyncState(syncPrefs)
             syncEnabled = syncPrefs.syncEnabled
+            lastSyncedSessionTimestamp = syncPrefs.lastSyncedSessionTimestamp
             currentTime = System.currentTimeMillis() // Update current time to trigger recomposition
 
             // Check battery optimization status
             isBatteryOptimizationDisabled = isBatteryOptimizationDisabled(context)
 
-            // Query HealthConnect for last synced timestamp (async)
+            // Query HealthConnect for comparison (only works in foreground)
             if (healthConnectAvailable && syncPrefs.lastSyncedDeviceAddress != null) {
                 try {
                     healthConnectTimestamp = healthConnectHelper.getLastSyncedTimestamp(
@@ -328,8 +329,10 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
                     )
                 } catch (e: Exception) {
                     Log.e("SyncTab", "Error querying HealthConnect: ${e.message}", e)
-                    healthConnectTimestamp = 0L
+                    healthConnectTimestamp = null
                 }
+            } else {
+                healthConnectTimestamp = null
             }
 
             kotlinx.coroutines.delay(1000) // Refresh every second to update relative timestamps
@@ -390,17 +393,72 @@ fun SyncTab(context: android.content.Context, healthConnectAvailable: Boolean) {
             }
         )
 
-        // Show last synced session from HealthConnect
-        if (!healthConnectAvailable) {
-            SyncInfoRow("Last synced session:", "Not available")
-        } else {
-            SyncInfoRow("Last synced session:",
-                if (healthConnectTimestamp > 0) {
-                    formatUnixTimestamp(healthConnectTimestamp)
+        // Check for divergence
+        val hasDivergence = healthConnectAvailable &&
+            healthConnectTimestamp != null &&
+            healthConnectTimestamp != lastSyncedSessionTimestamp
+
+        // Show last synced session timestamp from preferences
+        SyncInfoRow(
+            if (hasDivergence) "Last session (local):" else "Last session:",
+            if (lastSyncedSessionTimestamp > 0) {
+                formatUnixTimestamp(lastSyncedSessionTimestamp)
+            } else {
+                "None"
+            }
+        )
+
+        // Show HealthConnect timestamp only when there's a mismatch
+        if (hasDivergence) {
+            SyncInfoRow("Last session (HC):",
+                if (healthConnectTimestamp!! > 0) {
+                    formatUnixTimestamp(healthConnectTimestamp!!)
                 } else {
                     "None"
                 }
             )
+        }
+
+        if (hasDivergence) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            androidx.compose.material3.Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp)
+                ) {
+                    Text(
+                        text = "⚠ Timestamp Mismatch Detected",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "The local sync timestamp doesn't match HealthConnect. This can happen if HealthConnect data was cleared or modified externally.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            // Update local timestamp to match HealthConnect
+                            healthConnectTimestamp?.let {
+                                syncPrefs.lastSyncedSessionTimestamp = it
+                                lastSyncedSessionTimestamp = it
+                                Log.i("SyncTab", "Updated local timestamp to match HealthConnect: $it")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Sync from HealthConnect")
+                    }
+                }
+            }
         }
 
         syncState.lastSyncedDeviceAddress?.let { deviceAddress ->

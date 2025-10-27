@@ -123,12 +123,14 @@ class BackgroundSyncWorker(
 
         Log.d(TAG, "Found bike tracker: ${device.device.name}")
 
-        // Get last synced timestamp from HealthConnect (single source of truth)
-        val healthConnect = HealthConnectHelper(applicationContext)
-        val lastSyncedTimestamp = healthConnect.getLastSyncedTimestamp(device.device.address)
-        Log.d(TAG, "Last synced timestamp from HealthConnect: $lastSyncedTimestamp")
-
+        // Get last synced timestamp from SharedPreferences
+        // Note: We use SharedPreferences instead of querying HealthConnect because
+        // HealthConnect restricts background read access (privacy feature). While
+        // Android 15+ offers READ_HEALTH_DATA_IN_BACKGROUND permission, using
+        // SharedPreferences works on all Android versions without extra permissions.
         val syncPrefs = SyncPreferences(applicationContext)
+        val lastSyncedTimestamp = syncPrefs.lastSyncedSessionTimestamp
+        Log.d(TAG, "Last synced session timestamp from preferences: $lastSyncedTimestamp")
 
         // Connect to device and sync
         var gatt: BluetoothGatt? = null
@@ -324,6 +326,9 @@ class BackgroundSyncWorker(
                                         // Update last synced timestamp and increment counter
                                         currentLastSyncedTimestamp = startTime
                                         sessionsSynced++
+
+                                        // Update the last synced session timestamp in preferences
+                                        syncPrefs.lastSyncedSessionTimestamp = startTime
 
                                         // Request next session
                                         requestNextSession(gatt, sessionDataChar!!)

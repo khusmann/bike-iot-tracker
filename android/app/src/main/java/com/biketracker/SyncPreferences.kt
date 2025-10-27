@@ -29,6 +29,7 @@ class SyncPreferences(context: Context) {
         private const val KEY_TARGET_DEVICE_ADDRESS = "target_device_address"
         private const val KEY_TARGET_DEVICE_NAME = "target_device_name"
         private const val KEY_LAST_SESSION_DATA_UPDATE_TIMESTAMP = "last_session_data_update_timestamp"
+        private const val KEY_LAST_SYNCED_SESSION_TIMESTAMP = "last_synced_session_timestamp"
     }
 
     /**
@@ -100,6 +101,22 @@ class SyncPreferences(context: Context) {
     var lastSessionDataUpdateTimestamp: Long
         get() = prefs.getLong(KEY_LAST_SESSION_DATA_UPDATE_TIMESTAMP, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_SESSION_DATA_UPDATE_TIMESTAMP, value).apply()
+
+    /**
+     * Unix timestamp (seconds) of the last session that was synced to HealthConnect.
+     * Used by the sync worker to request only newer sessions from the device.
+     * Defaults to 0 (request all sessions).
+     *
+     * Note: We store this in SharedPreferences instead of querying HealthConnect directly
+     * because HealthConnect restricts background read access by default (for privacy).
+     * While Android 15+ offers a READ_HEALTH_DATA_IN_BACKGROUND permission, using
+     * SharedPreferences works on all Android versions and doesn't require additional
+     * permissions. The UI performs a foreground check to detect any divergence between
+     * this local timestamp and HealthConnect's actual data.
+     */
+    var lastSyncedSessionTimestamp: Long
+        get() = prefs.getLong(KEY_LAST_SYNCED_SESSION_TIMESTAMP, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_SYNCED_SESSION_TIMESTAMP, value).apply()
 
     /**
      * Record a successful sync

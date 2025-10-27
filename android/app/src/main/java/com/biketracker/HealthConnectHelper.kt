@@ -128,8 +128,7 @@ class HealthConnectHelper(private val context: Context) {
     companion object {
         val REQUIRED_PERMISSIONS = setOf(
             HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-            HealthPermission.getWritePermission(ExerciseSessionRecord::class),
-            "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
+            HealthPermission.getWritePermission(ExerciseSessionRecord::class)
         )
     }
 }
