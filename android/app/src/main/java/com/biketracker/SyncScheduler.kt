@@ -45,18 +45,18 @@ object SyncScheduler {
             SYNC_INTERVAL_MINUTES, TimeUnit.MINUTES
         )
             .setConstraints(constraints)
-            // Prevent immediate execution on app launch - delay first sync by interval
-            .setInitialDelay(SYNC_INTERVAL_MINUTES, TimeUnit.MINUTES)
+            // No initial delay - first sync happens immediately
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             BackgroundSyncWorker.WORK_NAME,
-            // KEEP means if work is already scheduled, don't replace it
-            ExistingPeriodicWorkPolicy.KEEP,
+            // REPLACE means if work is already scheduled, replace it with this new request
+            // This ensures immediate sync when re-enabling
+            ExistingPeriodicWorkPolicy.REPLACE,
             syncWorkRequest
         )
 
-        Log.d(TAG, "Background sync scheduled (every $SYNC_INTERVAL_MINUTES minutes, first sync in $SYNC_INTERVAL_MINUTES minutes, KEEP policy)")
+        Log.d(TAG, "Background sync scheduled (every $SYNC_INTERVAL_MINUTES minutes, first sync immediately, REPLACE policy)")
     }
 
     /**
