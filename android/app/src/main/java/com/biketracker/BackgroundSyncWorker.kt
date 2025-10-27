@@ -300,8 +300,9 @@ class BackgroundSyncWorker(
                                 val startTime = sessionJson.getLong("start_time")
                                 val endTime = sessionJson.getLong("end_time")
                                 val revolutions = sessionJson.getInt("revolutions")
+                                val version = sessionJson.getLong("version")
 
-                                Log.d(TAG, "Session: start=$startTime, end=$endTime, revolutions=$revolutions, remaining=$remainingSessions")
+                                Log.d(TAG, "Session: start=$startTime, end=$endTime, revolutions=$revolutions, version=$version, remaining=$remainingSessions")
 
                                 // Write to HealthConnect
                                 CoroutineScope(Dispatchers.IO).launch {
@@ -310,7 +311,8 @@ class BackgroundSyncWorker(
                                             device.device.address,
                                             startTime,
                                             endTime,
-                                            revolutions
+                                            revolutions,
+                                            version
                                         )
 
                                         // Update last synced timestamp and increment counter
@@ -383,7 +385,8 @@ class BackgroundSyncWorker(
         bikeAddress: String,
         startTime: Long,
         endTime: Long,
-        @Suppress("UNUSED_PARAMETER") revolutions: Int  // Reserved for future cadence time series
+        @Suppress("UNUSED_PARAMETER") revolutions: Int,  // Reserved for future cadence time series
+        version: Long
     ) {
         val healthConnectClient = HealthConnectClient.getOrCreate(applicationContext)
 
@@ -396,14 +399,14 @@ class BackgroundSyncWorker(
             title = "Stationary Bike",
             metadata = Metadata(
                 clientRecordId = "bike-$bikeAddress-$startTime",
-                // Use start time as version - ensures duplicates are handled as upserts
-                clientRecordVersion = startTime
+                // Use version from firmware - incremented each save for proper upsert behavior
+                clientRecordVersion = version
             )
         )
 
         try {
             healthConnectClient.insertRecords(listOf(exerciseSession))
-            Log.d(TAG, "Successfully wrote session to HealthConnect: $startTime")
+            Log.d(TAG, "Successfully wrote session to HealthConnect: $startTime (version $version)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write session to HealthConnect", e)
             throw e

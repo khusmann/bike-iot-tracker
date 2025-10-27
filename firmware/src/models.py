@@ -33,10 +33,12 @@ class Session:
         start_time: Unix timestamp in seconds when session started (serves as unique ID).
         end_time: Unix timestamp in seconds when session ended (or last update).
         revolutions: Total crank revolutions in this session.
+        version: Incremented each time the session is saved. Used for HealthConnect upsert.
     """
     start_time: int = 0
     end_time: int = 0
     revolutions: int = 0
+    version: int = 0
 
     def to_dict(self) -> dict[str, t.Any]:
         """Convert Session to dictionary for JSON serialization.
@@ -49,6 +51,7 @@ class Session:
             "start_time": self.start_time,
             "end_time": self.end_time,
             "revolutions": self.revolutions,
+            "version": self.version,
         }
 
     @classmethod
@@ -65,6 +68,7 @@ class Session:
             start_time=data["start_time"],
             end_time=data["end_time"],
             revolutions=data["revolutions"],
+            version=data["version"],
         )
 
     def to_json(self) -> str:
