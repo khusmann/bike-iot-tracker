@@ -250,6 +250,10 @@ class BackgroundSyncWorker(
                                 return
                             }
 
+                            // Add delay to allow ESP32 to update characteristic value
+                            // The ESP32 needs time to process the write and update the value
+                            Thread.sleep(500)
+
                             // After write succeeds, read the response
                             val readSuccess = gatt.readCharacteristic(characteristic)
                             if (!readSuccess) {
