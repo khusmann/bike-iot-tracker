@@ -48,7 +48,7 @@ async def session_idle_timeout(
 
         elapsed_ms = ticks_diff(current_time_ms, last_event_ms)
 
-        if elapsed_ms >= config.session_idle_timeout_ms:
+        if elapsed_ms / 1000 >= config.session_idle_timeout_s:
             log(f"Idle timeout detected: {elapsed_ms}ms since last event")
             session_manager.end_session()
 

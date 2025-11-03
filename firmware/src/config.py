@@ -35,8 +35,8 @@ class Config:
     reed_pin: int = 5  # GPIO pin for reed switch (crank sensor)
 
     # Session Management
-    # 10 minutes - time before ending inactive session
-    session_idle_timeout_ms: int = 10 * 60 * 1000
+    # 5 minutes - time before ending inactive session
+    session_idle_timeout_s: int = 5 * 60
     # 5 minutes - periodic save interval for active sessions
     session_save_interval_s: int = 5 * 60
     # 5 minutes - minimum session duration to keep
@@ -58,7 +58,7 @@ def _load_config(dev: bool = False) -> Config:
 
     # Apply development environment overrides
     if dev:
-        config.session_idle_timeout_ms = 30 * 1000  # 30 seconds for faster testing
+        config.session_idle_timeout_s = 30  # 30 seconds for faster testing
 
     return config
 
