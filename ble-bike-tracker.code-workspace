@@ -9,7 +9,7 @@
       "path": "firmware"
     },
     {
-      "name": "bike-iot-tracker",
+      "name": "ble-bike-tracker",
       "path": "."
     }
   ],
